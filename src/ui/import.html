@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Import Passkeys - PassKey Vault</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 14px;
+        color: #000000;
+        background: #ffffff;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .container {
+        background: #ffffff;
+        border-radius: 0;
+        border: 3px solid #000000;
+        max-width: 500px;
+        width: 100%;
+        overflow: hidden;
+      }
+
+      header {
+        background: #000000;
+        color: #fcd34d;
+        padding: 24px;
+        text-align: center;
+        border-bottom: 3px solid #fcd34d;
+      }
+
+      header h1 {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      header p {
+        opacity: 0.9;
+        font-size: 14px;
+      }
+
+      main {
+        padding: 24px;
+        background: #ffffff;
+      }
+
+      .drop-zone {
+        border: 3px dashed #000000;
+        border-radius: 0;
+        padding: 40px 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.1s;
+        background: #f5f5f5;
+      }
+
+      .drop-zone:hover,
+      .drop-zone.drag-over {
+        border-style: solid;
+        background: #fcd34d;
+      }
+
+      .drop-zone-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+      }
+
+      .drop-zone h3 {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: #000000;
+        text-transform: uppercase;
+      }
+
+      .drop-zone p {
+        color: #333333;
+        font-size: 13px;
+        margin-bottom: 16px;
+      }
+
+      .drop-zone input[type='file'] {
+        display: none;
+      }
+
+      .btn {
+        padding: 10px 20px;
+        border: 3px solid #000000;
+        border-radius: 0;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.1s;
+        text-transform: uppercase;
+        font-family: 'Courier New', Courier, monospace;
+      }
+
+      .btn-primary {
+        background: #fcd34d;
+        color: #000000;
+        border-color: #000000;
+      }
+
+      .btn-primary:hover {
+        background: #000000;
+        color: #fcd34d;
+      }
+
+      .btn-secondary {
+        background: #ffffff;
+        color: #000000;
+        border-color: #000000;
+      }
+
+      .btn-secondary:hover {
+        background: #f5f5f5;
+      }
+
+      .status {
+        margin-top: 20px;
+        padding: 16px;
+        border-radius: 0;
+        border: 3px solid #000000;
+        display: none;
+        font-weight: 700;
+      }
+
+      .status.success {
+        background: #000000;
+        color: #10b981;
+        border-color: #10b981;
+        display: block;
+      }
+
+      .status.error {
+        background: #000000;
+        color: #ef4444;
+        border-color: #ef4444;
+        display: block;
+      }
+
+      .status.info {
+        background: #000000;
+        color: #fcd34d;
+        border-color: #fcd34d;
+        display: block;
+      }
+
+      .preview {
+        margin-top: 20px;
+        display: none;
+      }
+
+      .preview.visible {
+        display: block;
+      }
+
+      .preview h4 {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 12px;
+        color: #000000;
+        text-transform: uppercase;
+      }
+
+      .preview-list {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 3px solid #000000;
+        border-radius: 0;
+      }
+
+      .preview-item {
+        padding: 12px 16px;
+        border-bottom: 2px solid #000000;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #ffffff;
+      }
+
+      .preview-item:last-child {
+        border-bottom: none;
+      }
+
+      .preview-item:hover {
+        background: #f5f5f5;
+      }
+
+      .preview-item-site {
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .preview-item-user {
+        font-size: 12px;
+        color: #333333;
+      }
+
+      .preview-item-status {
+        font-size: 12px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 0;
+        border: 2px solid #000000;
+        text-transform: uppercase;
+      }
+
+      .preview-item-status.new {
+        background: #000000;
+        color: #10b981;
+        border-color: #10b981;
+      }
+
+      .preview-item-status.duplicate {
+        background: #000000;
+        color: #fcd34d;
+        border-color: #fcd34d;
+      }
+
+      .actions {
+        margin-top: 20px;
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+      }
+
+      .actions.hidden {
+        display: none;
+      }
+
+      footer {
+        padding: 16px 24px;
+        background: #000000;
+        border-top: 3px solid #fcd34d;
+        text-align: center;
+      }
+
+      footer a {
+        color: #fcd34d;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      footer a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Import Passkeys</h1>
+        <p>Import passkeys from a backup file</p>
+      </header>
+
+      <main>
+        <div class="drop-zone" id="drop-zone">
+          <div class="drop-zone-icon">[ ]</div>
+          <h3>Drop your backup file here</h3>
+          <p>or click to browse</p>
+          <input type="file" id="file-input" accept=".json,application/json" />
+          <button class="btn btn-primary" id="choose-file-btn">Choose File</button>
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <div class="preview" id="preview">
+          <h4>Passkeys to import:</h4>
+          <div class="preview-list" id="preview-list"></div>
+        </div>
+
+        <div class="actions hidden" id="actions">
+          <button class="btn btn-secondary" id="cancel-btn">Cancel</button>
+          <button class="btn btn-primary" id="import-btn">Import Passkeys</button>
+        </div>
+      </main>
+
+      <footer>
+        <a href="#" id="close-link">Close this tab</a>
+      </footer>
+    </div>
+
+    <script src="import.js"></script>
+  </body>
+</html>

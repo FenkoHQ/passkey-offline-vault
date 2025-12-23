@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "PassKey Vault",
+  "version": "0.1.0",
+  "description": "Secure passkey storage and management",
+
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "offscreen",
+    "background"
+  ],
+
+  "host_permissions": [
+    "https://*/*",
+    "http://localhost:*/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://localhost:*/*"],
+      "js": ["content/content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["content/webauthn-inject.js"],
+      "matches": ["https://*/*", "http://localhost:*/*"]
+    }
+  ],
+
+  "action": {
+    "default_title": "PassKey Vault",
+    "default_popup": "popup.html"
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
