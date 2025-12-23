@@ -129,7 +129,7 @@
    * Open import page in a new tab (file inputs don't work well in popups)
    */
   function openImportPage(): void {
-    chrome.tabs.create({ url: chrome.runtime.getURL('import.html') });
+    window.open(chrome.runtime.getURL('import.html'));
   }
 
   async function loadPasskeys(): Promise<void> {

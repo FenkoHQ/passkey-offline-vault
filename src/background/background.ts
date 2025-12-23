@@ -11,12 +11,10 @@ const PASSKEY_STORAGE_KEY = 'passkeys';
 class BackgroundService {
   private agents: Map<string, any>;
   private isInitialized: boolean;
-  private offscreenDocument: string | null;
 
   constructor() {
     this.agents = new Map();
     this.isInitialized = false;
-    this.offscreenDocument = null;
     this.initialize();
   }
 

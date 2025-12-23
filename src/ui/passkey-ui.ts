@@ -105,55 +105,46 @@ const UI_STYLES = `
     background: #ffffff;
     border-radius: 0;
     border: 3px solid #000000;
-    width: 340px;
+    width: 260px;
     max-height: 70vh;
     overflow: hidden;
     font-family: 'Courier New', Courier, monospace;
   }
 
   .pkv-card-header {
-    background: #000000;
-    color: #FCD34D;
-    padding: 16px 20px;
-    border-bottom: 3px solid #FCD34D;
-  }
-
-  .pkv-card-header-content {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .pkv-card-icon {
-    font-size: 24px;
+    background: #ffffff;
+    color: #000000;
+    padding: 12px 16px;
+    border-bottom: 2px solid #e0e0e0;
   }
 
   .pkv-card-title {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     margin: 0;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0;
+    color: #000000;
   }
 
   .pkv-card-subtitle {
-    font-size: 12px;
-    opacity: 0.9;
-    margin-top: 2px;
+    font-size: 11px;
+    opacity: 0.85;
+    margin-top: 0;
   }
 
   .pkv-card-body {
-    padding: 12px 16px;
+    padding: 10px;
     max-height: 280px;
     overflow-y: auto;
     background: #ffffff;
   }
 
   .pkv-card-footer {
-    padding: 12px 16px;
-    border-top: 3px solid #000000;
+    padding: 10px 16px;
+    border-top: 2px solid #000000;
     display: flex;
-    gap: 10px;
+    gap: 8px;
     background: #f5f5f5;
   }
 
@@ -161,16 +152,16 @@ const UI_STYLES = `
   .pkv-passkey-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
   }
 
   .pkv-passkey-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
+    gap: 8px;
+    padding: 8px;
     background: #ffffff;
-    border: 3px solid #000000;
+    border: 2px solid #000000;
     border-radius: 0;
     cursor: pointer;
     transition: all 0.1s ease;
@@ -186,18 +177,14 @@ const UI_STYLES = `
   }
 
   .pkv-passkey-avatar {
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     border-radius: 0;
     background: #000000;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #FCD34D;
-    font-size: 14px;
-    font-weight: 700;
     flex-shrink: 0;
-    border: 2px solid #000000;
   }
 
   .pkv-passkey-info {
@@ -218,7 +205,6 @@ const UI_STYLES = `
   .pkv-passkey-detail {
     font-size: 11px;
     color: #333333;
-    margin-top: 1px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -407,22 +393,24 @@ function showPasskeySelector(passkeys: PasskeyOption[], rpId: string): Promise<s
     const passkeyListHtml =
       passkeys.length > 0
         ? `<div class="pkv-passkey-list">
-          ${passkeys
-            .map(
-              (pk, index) => `
-            <div class="pkv-passkey-item ${index === 0 ? 'pkv-selected' : ''}" data-id="${escapeHtml(pk.id)}">
-              <div class="pkv-passkey-avatar">${getInitials(pk.userDisplayName || pk.userName)}</div>
-              <div class="pkv-passkey-info">
-                <div class="pkv-passkey-name">${escapeHtml(pk.userDisplayName || pk.userName || 'Unknown User')}</div>
-                <div class="pkv-passkey-detail">${escapeHtml(pk.userName || pk.id.substring(0, 16) + '...')}</div>
-              </div>
-              <div class="pkv-passkey-check">
-                <span class="pkv-passkey-check-icon">&#10003;</span>
-              </div>
-            </div>
-          `
-            )
-            .join('')}
+           ${passkeys
+             .map(
+               (pk, index) => `
+             <div class="pkv-passkey-item ${index === 0 ? 'pkv-selected' : ''}" data-id="${escapeHtml(pk.id)}">
+               <div class="pkv-passkey-avatar">
+                 <svg xmlns="http://www.w3.org/2000/svg" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" image-rendering="optimizeQuality" fill-rule="evenodd" clip-rule="evenodd" viewBox="0 0 512 468.554"><path fill="#fff" fill-rule="nonzero" d="M483.381 151.575H28.619v219.35c0 37.906 31.106 69.009 69.013 69.009h316.736c37.884 0 69.013-31.125 69.013-69.009v-219.35z"/><path fill="#FD5" d="M353.177 122.962l36.214-92.199c.286-.725.621-1.441.999-2.144H284.447l-37.054 94.343h105.784zm62.346-94.33l-37.051 94.33h104.909v-25.33c0-18.947-7.773-36.205-20.295-48.724-12.255-12.258-29.061-19.967-47.563-20.276zM88.36 122.962l36.214-92.199c.287-.725.621-1.441.999-2.144H97.632c-18.963 0-36.218 7.77-48.731 20.283-12.512 12.512-20.282 29.767-20.282 48.73v25.33H88.36zm62.353-94.343l-37.058 94.343h108.681l36.129-91.983c.315-.798.687-1.587 1.116-2.36H150.713z"/><path fill="#212121" fill-rule="nonzero" d="M97.632 0h316.736C468.073 0 512 43.928 512 97.632v273.293c0 53.682-43.95 97.629-97.632 97.629H97.632C43.927 468.554 0 424.629 0 370.925V97.632C0 43.902 43.902 0 97.632 0zm255.545 122.962l36.214-92.199c.286-.725.621-1.441.999-2.144H284.447l-37.054 94.343h105.784zm62.346-94.33l-37.051 94.33h104.909v-25.33c0-37.461-30.413-68.377-67.858-69zM88.36 122.962l36.214-92.199c.287-.725.621-1.441.999-2.144H97.632c-37.929 0-69.013 31.084-69.013 69.013v25.33H88.36zm62.353-94.343l-37.058 94.343h108.681l36.129-91.983c.315-.798.687-1.587 1.116-2.36H150.713zm332.668 122.956H28.619v219.35c0 37.906 31.106 69.009 69.013 69.009h316.736c37.884 0 69.013-31.125 69.013-69.009v-219.35z"/><path fill="#212121" fill-rule="nonzero" d="M195.916 244.816c1.685-13.282 7.845-25.185 16.868-34.209v-.036c10.691-10.708 25.475-17.357 41.71-17.357 16.271 0 31.02 6.649 41.746 17.357l.017.036c10.672 10.673 17.322 25.44 17.322 41.692v25.439h14.387c2.482.054 4.511 2.12 4.511 4.62v92.822c0 2.537-2.065 4.62-4.602 4.62H184.121c-2.537 0-4.602-2.084-4.602-4.62v-92.823c0-2.537 2.065-4.62 4.602-4.62l11.27.001v-25.584c0-2.482.163-4.929.471-7.338h.054zm22.413 32.922h72.33-.018v-25.783c0-9.912-4.077-18.971-10.618-25.494-6.559-6.54-15.582-10.599-25.53-10.599-9.911 0-18.952 4.04-25.493 10.599-6.16 6.161-10.128 14.477-10.563 23.718l-.09-.001-.018 1.667v25.893z"/></svg>
+               </div>
+               <div class="pkv-passkey-info">
+                 <div class="pkv-passkey-name">${escapeHtml(pk.userDisplayName || pk.userName || 'Unknown User')}</div>
+                 <div class="pkv-passkey-detail">${escapeHtml(pk.userName || pk.id.substring(0, 16) + '...')}</div>
+               </div>
+               <div class="pkv-passkey-check">
+                 <span class="pkv-passkey-check-icon">&#10003;</span>
+               </div>
+             </div>
+           `
+             )
+             .join('')}
         </div>`
         : `<div class="pkv-empty-state">
           <div class="pkv-empty-icon">&#128275;</div>
@@ -430,27 +418,26 @@ function showPasskeySelector(passkeys: PasskeyOption[], rpId: string): Promise<s
         </div>`;
 
     container.innerHTML = `
-      <div class="pkv-card">
-        <div class="pkv-card-header">
-          <div class="pkv-card-header-content">
-            <div class="pkv-card-icon">&#128274;</div>
-            <div>
-              <h2 class="pkv-card-title">Choose a Passkey</h2>
-              <div class="pkv-card-subtitle">Sign in to ${escapeHtml(rpId)}</div>
-            </div>
-          </div>
-        </div>
-        <div class="pkv-card-body">
-          ${passkeyListHtml}
-        </div>
-        <div class="pkv-card-footer">
-          <button class="pkv-btn pkv-btn-secondary" id="pkv-cancel">Cancel</button>
-          <button class="pkv-btn pkv-btn-primary" id="pkv-continue" ${passkeys.length === 0 ? 'disabled' : ''}>
-            Continue
-          </button>
-        </div>
-      </div>
-    `;
+       <div class="pkv-card">
+         <div class="pkv-card-header">
+           <div class="pkv-card-header-content">
+              <div>
+                <span class="pkv-card-title">Choose a Passkey</span>
+                <div class="pkv-card-subtitle">Sign in to ${escapeHtml(rpId)}</div>
+              </div>
+           </div>
+         </div>
+         <div class="pkv-card-body">
+           ${passkeyListHtml}
+         </div>
+         <div class="pkv-card-footer">
+           <button class="pkv-btn pkv-btn-secondary" id="pkv-cancel">Cancel</button>
+           <button class="pkv-btn pkv-btn-primary" id="pkv-continue" ${passkeys.length === 0 ? 'disabled' : ''}>
+             Continue
+           </button>
+         </div>
+       </div>
+     `;
 
     document.body.appendChild(container);
 

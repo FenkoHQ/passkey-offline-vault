@@ -4,18 +4,9 @@
   "version": "0.1.0",
   "description": "Secure passkey storage and management",
 
-  "permissions": [
-    "storage",
-    "activeTab",
-    "scripting",
-    "offscreen",
-    "background"
-  ],
+  "permissions": ["storage"],
 
-  "host_permissions": [
-    "https://*/*",
-    "http://localhost:*/*"
-  ],
+  "host_permissions": ["https://*/*", "*://*/*"],
 
   "background": {
     "service_worker": "background.js"
@@ -23,7 +14,7 @@
 
   "content_scripts": [
     {
-      "matches": ["https://*/*", "http://localhost:*/*"],
+      "matches": ["<all_urls>"],
       "js": ["content/content.js"],
       "run_at": "document_start",
       "all_frames": true
@@ -33,7 +24,7 @@
   "web_accessible_resources": [
     {
       "resources": ["content/webauthn-inject.js"],
-      "matches": ["https://*/*", "http://localhost:*/*"]
+      "matches": ["<all_urls>"]
     }
   ],
 

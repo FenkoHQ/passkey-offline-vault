@@ -130,8 +130,6 @@ export interface StorageArea {
 export interface BackgroundContext {
   storage: StorageArea;
   runtime: typeof chrome.runtime;
-  tabs: typeof chrome.tabs;
-  scripting: typeof chrome.scripting;
 }
 
 // Content script context
@@ -145,7 +143,6 @@ export interface ContentContext {
 export interface ChromeMessageSender {
   id?: string;
   url?: string;
-  tab?: chrome.tabs.Tab;
   frameId?: number;
 }
 
