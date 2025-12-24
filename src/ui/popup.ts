@@ -306,10 +306,16 @@
     div.innerHTML = `
       <div class="passkey-header">
         <div class="passkey-info">
-          <span class="passkey-rp">${popupEscapeHtml(passkey.rpId || 'Unknown Site')}</span>
-          ${passkey.user?.name ? `<span class="passkey-username">${popupEscapeHtml(passkey.user.name)}</span>` : ''}
+          <div class="passkey-rp">${popupEscapeHtml(passkey.rpId || 'Unknown Site')}</div>
+          ${passkey.user?.name ? `<div class="passkey-username">${popupEscapeHtml(passkey.user.name)}</div>` : ''}
         </div>
         <div class="passkey-actions">
+          <button class="copy-btn" title="Copy to clipboard">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
           <button class="expand-btn" title="Details">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="6 9 12 15 18 9"></polyline>
@@ -330,6 +336,13 @@
       </div>
     `;
 
+    // Add copy handler
+    const copyBtn = div.querySelector('.copy-btn') as HTMLButtonElement;
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyPasskeyToClipboard(passkey, copyBtn);
+    });
+
     // Add expand/collapse handler
     const expandBtn = div.querySelector('.expand-btn') as HTMLButtonElement;
     const details = div.querySelector('.passkey-details') as HTMLElement;
@@ -348,6 +361,31 @@
     });
 
     return div;
+  }
+
+  async function copyPasskeyToClipboard(passkey: any, btn: HTMLButtonElement): Promise<void> {
+    // Create a copy without private key for debugging
+    const debugData = {
+      id: passkey.id,
+      credentialId: passkey.credentialId,
+      type: passkey.type,
+      rpId: passkey.rpId,
+      origin: passkey.origin,
+      user: passkey.user,
+      publicKey: passkey.publicKey,
+      createdAt: passkey.createdAt,
+      counter: passkey.counter,
+      lastUsed: passkey.lastUsed,
+    };
+
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(debugData, null, 2));
+      btn.classList.add('copied');
+      setTimeout(() => btn.classList.remove('copied'), 1500);
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+      showNotification('Failed to copy', 'error');
+    }
   }
 
   async function deletePasskey(credentialId: string, siteName: string): Promise<void> {

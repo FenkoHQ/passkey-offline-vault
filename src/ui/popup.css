@@ -229,8 +229,8 @@ main {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .passkey-rp {
@@ -256,6 +256,34 @@ main {
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+}
+
+.expand-btn,
+.copy-btn {
+  background: none;
+  border: none;
+  color: #666666;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform 0.15s,
+    color 0.1s;
+}
+
+.expand-btn:hover,
+.copy-btn:hover {
+  color: #000000;
+}
+
+.copy-btn.copied {
+  color: #10b981;
+}
+
+.expand-btn.expanded {
+  transform: rotate(180deg);
 }
 
 .expand-btn {
