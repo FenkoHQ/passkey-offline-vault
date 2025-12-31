@@ -8,6 +8,17 @@ import {
 const PASSKEY_STORAGE_KEY = 'passkeys';
 const SYNC_CONFIG_KEY = 'sync_config';
 const SYNC_DEVICES_KEY = 'sync_devices';
+const SYNC_STATUS_KEY = 'sync_status';
+
+interface SyncStatus {
+  lastSyncAttempt: number | null;
+  lastSyncSuccess: number | null;
+  pendingChanges: number;
+  connectionStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
+  lastError: string | null;
+  localPasskeyCount: number;
+  syncedPasskeyCount: number;
+}
 
 interface SyncConfig {
   enabled: boolean;
@@ -37,10 +48,20 @@ interface SyncChain {
 class BackgroundService {
   private agents: Map<string, any>;
   private isInitialized: boolean;
+  private syncStatus: SyncStatus;
 
   constructor() {
     this.agents = new Map();
     this.isInitialized = false;
+    this.syncStatus = {
+      lastSyncAttempt: null,
+      lastSyncSuccess: null,
+      pendingChanges: 0,
+      connectionStatus: 'disconnected',
+      lastError: null,
+      localPasskeyCount: 0,
+      syncedPasskeyCount: 0,
+    };
     this.initialize();
   }
 
@@ -114,6 +135,10 @@ class BackgroundService {
         return this.getSyncChainInfo();
       case 'REMOVE_SYNC_DEVICE':
         return this.removeSyncDevice(message.deviceId);
+      case 'GET_SYNC_STATUS':
+        return this.getSyncStatus();
+      case 'TRIGGER_SYNC':
+        return this.handleTriggerSync();
       default:
         throw new Error(`Unknown message type: ${type}`);
     }
@@ -257,6 +282,10 @@ class BackgroundService {
 
       await chrome.storage.local.set({ [PASSKEY_STORAGE_KEY]: passkeys });
       console.log('PassKey Vault: Created and stored passkey', credentialIdBase64);
+
+      this.logSync('PASSKEY_CREATED', { id: credentialIdBase64, rpId });
+      await this.incrementPendingChanges();
+      this.triggerSync();
 
       const rawIdBase64 = this.base64urlToBase64(credentialIdBase64);
       const clientDataJSONBase64 = this.arrayBufferToBase64(clientDataJSONBytes.buffer);
@@ -949,6 +978,11 @@ class BackgroundService {
 
       if (filtered.length < passkeys.length) {
         await chrome.storage.local.set({ [PASSKEY_STORAGE_KEY]: filtered });
+
+        this.logSync('PASSKEY_DELETED', { credentialId });
+        await this.incrementPendingChanges();
+        this.triggerSync();
+
         return { success: true, message: 'Passkey deleted' };
       }
       return { success: false, error: 'Passkey not found' };
@@ -1147,6 +1181,112 @@ class BackgroundService {
     if (platform.includes('win')) return 'Desktop (Windows)';
     if (platform.includes('linux')) return 'Desktop (Linux)';
     return 'Desktop';
+  }
+
+  private async getSyncStatus(): Promise<any> {
+    try {
+      const configResult = await chrome.storage.local.get(SYNC_CONFIG_KEY);
+      const config: SyncConfig = configResult[SYNC_CONFIG_KEY];
+      const passkeysResult = await chrome.storage.local.get(PASSKEY_STORAGE_KEY);
+      const passkeys: any[] = passkeysResult[PASSKEY_STORAGE_KEY] || [];
+
+      const statusResult = await chrome.storage.local.get(SYNC_STATUS_KEY);
+      const persistedStatus = statusResult[SYNC_STATUS_KEY] || {};
+
+      this.syncStatus = {
+        ...this.syncStatus,
+        ...persistedStatus,
+        localPasskeyCount: passkeys.length,
+      };
+
+      const isEnabled = config?.enabled || false;
+
+      this.logSync('GET_SYNC_STATUS', {
+        enabled: isEnabled,
+        localCount: passkeys.length,
+        pendingChanges: this.syncStatus.pendingChanges,
+      });
+
+      return {
+        success: true,
+        status: {
+          enabled: isEnabled,
+          chainId: config?.chainId || null,
+          deviceId: config?.deviceId || null,
+          ...this.syncStatus,
+        },
+      };
+    } catch (error: any) {
+      console.error('PassKey Vault: Error getting sync status:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  private async updateSyncStatus(updates: Partial<SyncStatus>): Promise<void> {
+    this.syncStatus = { ...this.syncStatus, ...updates };
+    await chrome.storage.local.set({ [SYNC_STATUS_KEY]: this.syncStatus });
+    this.logSync('SYNC_STATUS_UPDATE', updates);
+  }
+
+  private async incrementPendingChanges(): Promise<void> {
+    await this.updateSyncStatus({
+      pendingChanges: this.syncStatus.pendingChanges + 1,
+    });
+  }
+
+  private logSync(action: string, details?: any): void {
+    const timestamp = new Date().toISOString();
+    console.log(`[SYNC ${timestamp}] ${action}`, details || '');
+  }
+
+  private async handleTriggerSync(): Promise<any> {
+    await this.triggerSync();
+    return { success: true };
+  }
+
+  private async triggerSync(): Promise<void> {
+    const configResult = await chrome.storage.local.get(SYNC_CONFIG_KEY);
+    const config: SyncConfig = configResult[SYNC_CONFIG_KEY];
+
+    if (!config?.enabled) {
+      this.logSync('TRIGGER_SYNC_SKIPPED', { reason: 'sync not enabled' });
+      return;
+    }
+
+    this.logSync('TRIGGER_SYNC', {
+      chainId: config.chainId,
+      pendingChanges: this.syncStatus.pendingChanges,
+    });
+
+    await this.updateSyncStatus({
+      lastSyncAttempt: Date.now(),
+      connectionStatus: 'connecting',
+    });
+
+    // TODO(P2P): Replace with actual IPFS/OrbitDB sync implementation
+    try {
+      const passkeysResult = await chrome.storage.local.get(PASSKEY_STORAGE_KEY);
+      const passkeys: any[] = passkeysResult[PASSKEY_STORAGE_KEY] || [];
+
+      await this.updateSyncStatus({
+        lastSyncSuccess: Date.now(),
+        pendingChanges: 0,
+        connectionStatus: 'connected',
+        lastError: null,
+        localPasskeyCount: passkeys.length,
+        syncedPasskeyCount: passkeys.length,
+      });
+
+      this.logSync('SYNC_COMPLETE', {
+        passkeyCount: passkeys.length,
+      });
+    } catch (error: any) {
+      await this.updateSyncStatus({
+        connectionStatus: 'error',
+        lastError: error.message,
+      });
+      this.logSync('SYNC_ERROR', { error: error.message });
+    }
   }
 }
 

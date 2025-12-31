@@ -867,6 +867,75 @@ html:has(.sync-settings) {
   background: #fef2f2;
   border-left-color: #dc2626;
 }
+
+.sync-overview {
+  margin-bottom: 20px;
+}
+
+.sync-overview h2 {
+  font-size: 14px;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.status-item {
+  background: #f5f5f5;
+  border: 2px solid #000000;
+  padding: 10px 12px;
+}
+
+.status-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #666666;
+  margin-bottom: 4px;
+}
+
+.status-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #000000;
+}
+
+.status-connected {
+  color: #10b981;
+}
+
+.status-connecting {
+  color: #f59e0b;
+}
+
+.status-disconnected {
+  color: #666666;
+}
+
+.status-error {
+  color: #ef4444;
+}
+
+.has-pending {
+  color: #f59e0b;
+}
+
+.error-box {
+  background: #fef2f2;
+  border: 2px solid #ef4444;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #dc2626;
+}
+
+.btn-full {
+  width: 100%;
+}
 }
 
 .modal-icon {

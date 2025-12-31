@@ -42,6 +42,34 @@
           </div>
         </div>
 
+        <section class="sync-overview">
+          <h2>Sync Status</h2>
+          <div class="status-grid">
+            <div class="status-item">
+              <div class="status-label">Connection</div>
+              <div id="connection-status" class="status-value">--</div>
+            </div>
+            <div class="status-item">
+              <div class="status-label">Local Passkeys</div>
+              <div id="local-count" class="status-value">--</div>
+            </div>
+            <div class="status-item">
+              <div class="status-label">Synced Passkeys</div>
+              <div id="synced-count" class="status-value">--</div>
+            </div>
+            <div class="status-item">
+              <div class="status-label">Pending Changes</div>
+              <div id="pending-changes" class="status-value">--</div>
+            </div>
+            <div class="status-item">
+              <div class="status-label">Last Sync</div>
+              <div id="last-sync" class="status-value">--</div>
+            </div>
+          </div>
+          <div id="sync-error" class="error-box" style="display: none"></div>
+          <button id="manual-sync-btn" class="btn btn-secondary btn-sm">Sync Now</button>
+        </section>
+
         <section>
           <h2>Devices in Sync Chain</h2>
           <div id="devices-list" class="devices-list"></div>
@@ -69,10 +97,7 @@
             sure you have access to at least one other device before leaving.
           </div>
 
-          <button id="leave-chain-btn" class="btn btn-danger btn-full">
-              <!-- TESTTESTTEST -->
-            Leave Sync Chain
-          </button>
+          <button id="leave-chain-btn" class="btn btn-danger btn-full">Leave Sync Chain</button>
         </section>
       </div>
 

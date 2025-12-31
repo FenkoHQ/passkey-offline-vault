@@ -10,6 +10,19 @@ interface SyncConfig {
   seedHash: string | null;
 }
 
+interface SyncStatusResponse {
+  enabled: boolean;
+  chainId: string | null;
+  deviceId: string | null;
+  lastSyncAttempt: number | null;
+  lastSyncSuccess: number | null;
+  pendingChanges: number;
+  connectionStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
+  lastError: string | null;
+  localPasskeyCount: number;
+  syncedPasskeyCount: number;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   loadSyncConfig();
   setupEventListeners();
@@ -20,6 +33,7 @@ function setupEventListeners(): void {
   const addDeviceBtn = document.getElementById('add-device-btn') as HTMLButtonElement;
   const leaveChainBtn = document.getElementById('leave-chain-btn') as HTMLButtonElement;
   const setupSyncBtn = document.getElementById('setup-sync-btn') as HTMLButtonElement;
+  const manualSyncBtn = document.getElementById('manual-sync-btn') as HTMLButtonElement;
 
   if (backBtn) {
     backBtn.addEventListener('click', () => {
@@ -41,6 +55,10 @@ function setupEventListeners(): void {
     setupSyncBtn.addEventListener('click', () => {
       window.location.href = chrome.runtime.getURL('sync-setup.html');
     });
+  }
+
+  if (manualSyncBtn) {
+    manualSyncBtn.addEventListener('click', triggerManualSync);
   }
 }
 
@@ -69,6 +87,27 @@ async function confirmLeaveChain(): Promise<void> {
     }
   } catch (error) {
     alert(`Error leaving sync chain: ${error}`);
+  }
+}
+
+async function triggerManualSync(): Promise<void> {
+  const btn = document.getElementById('manual-sync-btn') as HTMLButtonElement;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Syncing...';
+  }
+
+  try {
+    await chrome.runtime.sendMessage({ type: 'TRIGGER_SYNC' });
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await loadSyncStatus();
+  } catch (error) {
+    console.error('Manual sync failed:', error);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Sync Now';
+    }
   }
 }
 
@@ -123,6 +162,80 @@ function showSynced(config: SyncConfig): void {
     devicesListEl.innerHTML = '<p>Loading devices...</p>';
     loadDevicesList();
   }
+
+  loadSyncStatus();
+}
+
+async function loadSyncStatus(): Promise<void> {
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'GET_SYNC_STATUS' });
+
+    if (!result.success) {
+      console.error('Failed to get sync status:', result.error);
+      return;
+    }
+
+    const status: SyncStatusResponse = result.status;
+    updateSyncStatusUI(status);
+  } catch (error) {
+    console.error('Failed to load sync status:', error);
+  }
+}
+
+function updateSyncStatusUI(status: SyncStatusResponse): void {
+  const connectionEl = document.getElementById('connection-status');
+  const localCountEl = document.getElementById('local-count');
+  const syncedCountEl = document.getElementById('synced-count');
+  const pendingEl = document.getElementById('pending-changes');
+  const lastSyncEl = document.getElementById('last-sync');
+  const errorEl = document.getElementById('sync-error');
+
+  if (connectionEl) {
+    connectionEl.textContent = formatConnectionStatus(status.connectionStatus);
+    connectionEl.className = `status-value status-${status.connectionStatus}`;
+  }
+
+  if (localCountEl) {
+    localCountEl.textContent = String(status.localPasskeyCount);
+  }
+
+  if (syncedCountEl) {
+    syncedCountEl.textContent = String(status.syncedPasskeyCount);
+  }
+
+  if (pendingEl) {
+    pendingEl.textContent = String(status.pendingChanges);
+    if (status.pendingChanges > 0) {
+      pendingEl.classList.add('has-pending');
+    } else {
+      pendingEl.classList.remove('has-pending');
+    }
+  }
+
+  if (lastSyncEl) {
+    lastSyncEl.textContent = status.lastSyncSuccess
+      ? formatLastSeen(status.lastSyncSuccess)
+      : 'Never';
+  }
+
+  if (errorEl) {
+    if (status.lastError) {
+      errorEl.textContent = status.lastError;
+      errorEl.style.display = 'block';
+    } else {
+      errorEl.style.display = 'none';
+    }
+  }
+}
+
+function formatConnectionStatus(status: string): string {
+  const statusMap: Record<string, string> = {
+    disconnected: 'Disconnected',
+    connecting: 'Connecting...',
+    connected: 'Connected',
+    error: 'Error',
+  };
+  return statusMap[status] || status;
 }
 
 async function loadDevicesList(): Promise<void> {
