@@ -14,7 +14,6 @@ interface SyncConfig {
   seedHash: string | null;
 }
 
-let currentConfig: SyncConfig | null = null;
 let currentMnemonic: string = '';
 
 document.addEventListener('DOMContentLoaded', () => {

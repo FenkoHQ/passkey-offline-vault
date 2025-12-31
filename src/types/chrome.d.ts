@@ -1,5 +1,7 @@
 // Basic Chrome Extension API type definitions for PassKey Vault
 // These are minimal definitions to enable TypeScript compilation
+// Note: WebAuthn types are provided by TypeScript's DOM lib
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 declare global {
   namespace chrome {
@@ -76,88 +78,7 @@ declare global {
     }
   }
 
-  // Extend existing interfaces
-  interface Navigator {
-    credentials: CredentialsContainer;
-  }
-
-  interface CredentialsContainer {
-    create(options?: CredentialCreationOptions): Promise<Credential | null>;
-    get(options?: CredentialRequestOptions): Promise<Credential | null>;
-  }
-
-  interface Credential {
-    id: string;
-    type: string;
-    rawId?: ArrayBuffer;
-    response?: any;
-    getClientExtensionResults?(): any;
-    getType?(): string;
-  }
-
-  interface CredentialCreationOptions {
-    publicKey?: PublicKeyCredentialCreationOptions;
-    signal?: AbortSignal;
-  }
-
-  interface CredentialRequestOptions {
-    publicKey?: PublicKeyCredentialRequestOptions;
-    signal?: AbortSignal;
-  }
-
-  interface PublicKeyCredentialCreationOptions {
-    rp: PublicKeyCredentialRpEntity;
-    user: PublicKeyCredentialUserEntity;
-    challenge: ArrayBuffer;
-    pubKeyCredParams: PublicKeyCredentialParameters[];
-    timeout?: number;
-    excludeCredentials?: PublicKeyCredentialDescriptor[];
-    authenticatorSelection?: AuthenticatorSelectionCriteria;
-    attestation?: AttestationConveyancePreference;
-    extensions?: any;
-  }
-
-  interface PublicKeyCredentialRequestOptions {
-    challenge: ArrayBuffer;
-    timeout?: number;
-    rpId?: string;
-    allowCredentials?: PublicKeyCredentialDescriptor[];
-    userVerification?: UserVerificationRequirement;
-    extensions?: any;
-  }
-
-  interface PublicKeyCredentialRpEntity {
-    id: string;
-    name: string;
-  }
-
-  interface PublicKeyCredentialUserEntity {
-    id: string;
-    name: string;
-    displayName: string;
-  }
-
-  interface PublicKeyCredentialParameters {
-    type: string;
-    alg: number;
-  }
-
-  interface PublicKeyCredentialDescriptor {
-    type: string;
-    id: ArrayBuffer;
-    transports?: string[];
-  }
-
-  interface AuthenticatorSelectionCriteria {
-    authenticatorAttachment?: string;
-    requireResidentKey?: boolean;
-    residentKey?: string;
-    userVerification?: UserVerificationRequirement;
-  }
-
-  type AttestationConveyancePreference = 'none' | 'indirect' | 'direct';
-  type UserVerificationRequirement = 'required' | 'preferred' | 'discouraged';
-
+  // MessageSender for Chrome extension messaging
   interface MessageSender {
     id?: string;
     url?: string;

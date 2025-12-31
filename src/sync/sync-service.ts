@@ -12,12 +12,79 @@ const MAX_PROCESSED_EVENTS = 1000; // Track last N event IDs for replay protecti
 
 const NOSTR_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.nostr.band'];
 
+// Passkey data structure for sync
+export interface SyncPasskey {
+  id: string;
+  credentialId?: string;
+  type: string;
+  rpId: string;
+  origin?: string;
+  user?: {
+    id: string | null;
+    name?: string;
+    displayName?: string;
+  };
+  privateKey: string;
+  publicKey: string;
+  createdAt: number;
+  counter: number;
+  prfKey?: string;
+  syncSource?: string;
+  syncTimestamp?: number;
+}
+
+// Nostr event structure (NIP-01)
+export interface NostrEvent {
+  id: string;
+  pubkey: string;
+  created_at: number;
+  kind: number;
+  tags: string[][];
+  content: string;
+  sig: string;
+}
+
+// Sync chain device info
+export interface SyncDevice {
+  id: string;
+  name: string;
+  deviceType: string;
+  publicKey: string;
+  createdAt: number;
+  lastSeen: number;
+  isThisDevice: boolean;
+}
+
+// Sync chain storage structure
+export interface SyncChain {
+  id: string;
+  createdAt: number;
+  seedHash: string;
+  devices: SyncDevice[];
+}
+
+// Debug info returned by getDebugInfo
+export interface SyncDebugInfo {
+  chainId: string | null;
+  deviceId: string | null;
+  deviceName: string | null;
+  isConnected: boolean;
+  currentRelay: string;
+  currentRelayIndex: number;
+  wsReadyState: number | undefined;
+  hasEncryptionKey: boolean;
+  hasNostrKeys: boolean;
+  logsCount: number;
+  processedEventsCount: number;
+  messageSequence: number;
+}
+
 export interface DebugLogEntry {
   timestamp: number;
   level: 'info' | 'warn' | 'error' | 'debug';
   category: string;
   message: string;
-  data?: any;
+  data?: Record<string, unknown>;
 }
 
 export interface SyncMessage {
@@ -27,9 +94,16 @@ export interface SyncMessage {
   deviceName?: string;
   deviceType?: string;
   timestamp: number;
-  payload: any;
+  payload: SyncMessagePayload;
   // Add sequence number for ordering
   sequence?: number;
+}
+
+// Payload types for different message types
+export interface SyncMessagePayload {
+  action?: string;
+  requestId?: string;
+  bundle?: EncryptedPasskeyBundle;
 }
 
 export interface EncryptedPasskeyBundle {
@@ -65,7 +139,12 @@ export class SyncService {
   private processedEventIds = new Set<string>(); // SECURITY FIX: Replay protection
   private messageSequence = 0; // SECURITY FIX: Sequence numbers for ordering
 
-  private log(level: DebugLogEntry['level'], category: string, message: string, data?: any): void {
+  private log(
+    level: DebugLogEntry['level'],
+    category: string,
+    message: string,
+    data?: Record<string, unknown>
+  ): void {
     const entry: DebugLogEntry = {
       timestamp: Date.now(),
       level,
@@ -89,7 +168,9 @@ export class SyncService {
   }
 
   // SECURITY FIX: Sanitize data before logging to avoid exposing sensitive information
-  private sanitizeLogData(data: any): any {
+  private sanitizeLogData(
+    data: Record<string, unknown> | undefined
+  ): Record<string, unknown> | undefined {
     if (!data) return data;
     if (typeof data !== 'object') return data;
 
@@ -127,7 +208,7 @@ export class SyncService {
     this.debugLogs = [];
   }
 
-  getDebugInfo(): any {
+  getDebugInfo(): SyncDebugInfo {
     // SECURITY FIX: Reduced exposure of sensitive data
     return {
       chainId: this.chainId ? this.chainId.substring(0, 8) + '...' : null,
@@ -321,9 +402,10 @@ export class SyncService {
           this.log('error', 'ws', 'WebSocket error', { error: String(error) });
           reject(error);
         };
-      } catch (error: any) {
+      } catch (error: unknown) {
         clearTimeout(timeoutId);
-        this.log('error', 'ws', 'Failed to create WebSocket', { error: error.message });
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.log('error', 'ws', 'Failed to create WebSocket', { error: errorMessage });
         reject(error);
       }
     });
@@ -498,7 +580,7 @@ export class SyncService {
   }
 
   // SECURITY FIX: Verify Nostr event BIP340 Schnorr signature
-  private async verifyNostrEventSignature(event: any): Promise<boolean> {
+  private async verifyNostrEventSignature(event: NostrEvent): Promise<boolean> {
     try {
       if (
         !event.id ||
@@ -543,8 +625,9 @@ export class SyncService {
       }
 
       return isValid;
-    } catch (error: any) {
-      this.log('error', 'crypto', 'Signature verification failed', { error: error.message });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.log('error', 'crypto', 'Signature verification failed', { error: errorMessage });
       return false;
     }
   }
@@ -588,7 +671,7 @@ export class SyncService {
         return;
       }
 
-      const existingIndex = chain.devices.findIndex((d: any) => d.id === msg.deviceId);
+      const existingIndex = chain.devices.findIndex((d: SyncDevice) => d.id === msg.deviceId);
 
       const deviceInfo = {
         id: msg.deviceId,
@@ -620,8 +703,9 @@ export class SyncService {
 
       await chrome.storage.local.set({ [SYNC_DEVICES_KEY]: chain });
       this.log('debug', 'device', 'Saved device list', { deviceCount: chain.devices.length });
-    } catch (error: any) {
-      this.log('error', 'device', 'Failed to update remote device', { error: error.message });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.log('error', 'device', 'Failed to update remote device', { error: errorMessage });
     }
   }
 
@@ -690,8 +774,9 @@ export class SyncService {
         });
         const remotePasskeys = await this.decryptBundle(bundle);
         await this.mergePasskeys(remotePasskeys, msg.deviceId);
-      } catch (error: any) {
-        this.log('error', 'sync', 'Failed to decrypt/merge bundle', { error: error.message });
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.log('error', 'sync', 'Failed to decrypt/merge bundle', { error: errorMessage });
       }
     }
   }
@@ -722,7 +807,7 @@ export class SyncService {
     await this.broadcastMessage(request);
   }
 
-  async broadcastPasskeyUpdate(passkeys: any[]): Promise<void> {
+  async broadcastPasskeyUpdate(passkeys: SyncPasskey[]): Promise<void> {
     if (!this.isConnected || !this.chainId) {
       this.log('warn', 'sync', 'Not connected, skipping passkey broadcast');
       return;
@@ -778,14 +863,15 @@ export class SyncService {
         msgType: msg.type,
       });
       this.ws.send(JSON.stringify(['EVENT', event]));
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       this.log('error', 'nostr', 'Failed to broadcast message', {
-        error: error?.message || String(error),
+        error: errorMessage,
       });
     }
   }
 
-  private async createNostrEvent(content: string): Promise<any> {
+  private async createNostrEvent(content: string): Promise<NostrEvent> {
     if (!this.nostrPrivateKey || !this.nostrPublicKey) {
       throw new Error('Nostr keys not initialized');
     }
@@ -868,7 +954,7 @@ export class SyncService {
   }
 
   // SECURITY FIX: passkeyIds no longer exposed outside encrypted payload
-  private async createEncryptedBundle(passkeys: any[]): Promise<EncryptedPasskeyBundle> {
+  private async createEncryptedBundle(passkeys: SyncPasskey[]): Promise<EncryptedPasskeyBundle> {
     if (!this.encryptionKey) {
       throw new Error('Encryption key not initialized');
     }
@@ -902,7 +988,7 @@ export class SyncService {
     };
   }
 
-  private async decryptBundle(bundle: EncryptedPasskeyBundle): Promise<any[]> {
+  private async decryptBundle(bundle: EncryptedPasskeyBundle): Promise<SyncPasskey[]> {
     if (!this.encryptionKey) {
       throw new Error('Encryption key not initialized');
     }
@@ -926,13 +1012,16 @@ export class SyncService {
     return payload.passkeys || []; // New format - extract passkeys from payload
   }
 
-  private async getLocalPasskeys(): Promise<any[]> {
+  private async getLocalPasskeys(): Promise<SyncPasskey[]> {
     const result = await chrome.storage.local.get(PASSKEY_STORAGE_KEY);
     return result[PASSKEY_STORAGE_KEY] || [];
   }
 
   // SECURITY FIX: Improved merge with source device tracking
-  private async mergePasskeys(remotePasskeys: any[], sourceDeviceId: string): Promise<void> {
+  private async mergePasskeys(
+    remotePasskeys: SyncPasskey[],
+    sourceDeviceId: string
+  ): Promise<void> {
     const localPasskeys = await this.getLocalPasskeys();
     const localMap = new Map(localPasskeys.map((p) => [p.id, p]));
 
@@ -1023,7 +1112,9 @@ export class SyncService {
       if (this.subId && this.ws.readyState === WebSocket.OPEN) {
         try {
           this.ws.send(JSON.stringify(['CLOSE', this.subId]));
-        } catch {}
+        } catch {
+          // Ignore errors when closing subscription - socket may already be closing
+        }
       }
       this.ws.close();
       this.ws = null;

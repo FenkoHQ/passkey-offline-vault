@@ -31,6 +31,12 @@ const targets = target === 'all' ? ['chrome', 'firefox'] : [target];
  */
 function getVersionFromGit() {
   try {
+    // Always fetch tags from remote to ensure we have the latest
+    try {
+      execSync('git fetch --tags 2>/dev/null', { stdio: 'pipe' });
+    } catch {
+      // Ignore fetch errors (e.g., offline, no remote)
+    }
     // First, try to get exact tag on current commit
     try {
       const exactTag = execSync('git describe --tags --exact-match 2>/dev/null', {
