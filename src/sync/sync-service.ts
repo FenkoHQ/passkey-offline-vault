@@ -1,3 +1,7 @@
+import * as secp256k1 from '@noble/secp256k1';
+import { sha256 } from '@noble/hashes/sha256';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
+
 const RECONNECT_DELAY = 5000;
 const HEARTBEAT_INTERVAL = 30000;
 const PASSKEY_STORAGE_KEY = 'passkeys';
@@ -40,7 +44,8 @@ export class SyncService {
   private deviceName: string | null = null;
   private seedHash: string | null = null;
   private encryptionKey: CryptoKey | null = null;
-  private signingKey: CryptoKey | null = null;
+  private nostrPrivateKey: Uint8Array | null = null;
+  private nostrPublicKey: string | null = null;
   private isConnected = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -91,7 +96,8 @@ export class SyncService {
       subId: this.subId,
       wsReadyState: this.ws?.readyState,
       hasEncryptionKey: !!this.encryptionKey,
-      hasSigningKey: !!this.signingKey,
+      hasNostrKeys: !!this.nostrPrivateKey && !!this.nostrPublicKey,
+      nostrPubkey: this.nostrPublicKey ? this.nostrPublicKey.substring(0, 16) + '...' : null,
       logsCount: this.debugLogs.length,
     };
   }
@@ -137,6 +143,7 @@ export class SyncService {
       ['deriveKey', 'deriveBits']
     );
 
+    // Derive AES encryption key for message encryption
     this.encryptionKey = await crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
@@ -150,10 +157,12 @@ export class SyncService {
       ['encrypt', 'decrypt']
     );
 
-    const signingBits = await crypto.subtle.deriveBits(
+    // Derive secp256k1 private key for Nostr signing
+    // Use PBKDF2 to derive 32 bytes for the private key
+    const nostrKeyBits = await crypto.subtle.deriveBits(
       {
         name: 'PBKDF2',
-        salt: encoder.encode('passkey-vault-signing-v1'),
+        salt: encoder.encode('passkey-vault-nostr-v1'),
         iterations: 100000,
         hash: 'SHA-256',
       },
@@ -161,13 +170,15 @@ export class SyncService {
       256
     );
 
-    this.signingKey = await crypto.subtle.importKey(
-      'raw',
-      signingBits,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
+    this.nostrPrivateKey = new Uint8Array(nostrKeyBits);
+
+    // Use schnorr.getPublicKey for x-only pubkey (32 bytes, required by Nostr/BIP340)
+    const xOnlyPubKey = secp256k1.schnorr.getPublicKey(this.nostrPrivateKey);
+    this.nostrPublicKey = bytesToHex(xOnlyPubKey);
+
+    this.log('info', 'crypto', 'Derived Nostr keypair', {
+      pubkey: this.nostrPublicKey.substring(0, 16) + '...',
+    });
   }
 
   private async connectWithRetry(): Promise<void> {
@@ -609,27 +620,40 @@ export class SyncService {
       });
       this.ws.send(JSON.stringify(['EVENT', event]));
     } catch (error: any) {
-      this.log('error', 'nostr', 'Failed to broadcast message', { error: error.message });
+      this.log('error', 'nostr', 'Failed to broadcast message', {
+        error: error?.message || String(error),
+        stack: error?.stack,
+      });
     }
   }
 
   private async createNostrEvent(content: string): Promise<any> {
+    if (!this.nostrPrivateKey || !this.nostrPublicKey) {
+      throw new Error('Nostr keys not initialized');
+    }
+
     const created_at = Math.floor(Date.now() / 1000);
-    const pubkey = this.seedHash!.substring(0, 64).padEnd(64, '0');
+    const pubkey = this.nostrPublicKey;
     const tags = [['d', `pksync-${this.chainId}`]];
 
-    const eventForId = JSON.stringify([0, pubkey, created_at, 30078, tags, content]);
-    const encoder = new TextEncoder();
-    const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(eventForId));
-    const id = Array.from(new Uint8Array(hashBuffer))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+    // Create the event data for hashing (NIP-01 format)
+    const eventData = [0, pubkey, created_at, 30078, tags, content];
+    const eventJson = JSON.stringify(eventData);
 
-    const sigBuffer = await crypto.subtle.sign('HMAC', this.signingKey!, encoder.encode(id));
-    const sig = Array.from(new Uint8Array(sigBuffer))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('')
-      .padEnd(128, '0');
+    // Hash the serialized event to get the event ID
+    const eventHash = sha256(new TextEncoder().encode(eventJson));
+    const id = bytesToHex(eventHash);
+
+    // Sign the event ID with BIP340 Schnorr signature (required by Nostr)
+    // Use signAsync for better browser compatibility
+    const sig = await secp256k1.schnorr.signAsync(eventHash, this.nostrPrivateKey);
+    const sigHex = bytesToHex(sig);
+
+    this.log('debug', 'nostr', 'Created signed event', {
+      id: id.substring(0, 8),
+      pubkey: pubkey.substring(0, 8),
+      sigLen: sigHex.length,
+    });
 
     return {
       id,
@@ -638,7 +662,7 @@ export class SyncService {
       kind: 30078,
       tags,
       content,
-      sig,
+      sig: sigHex,
     };
   }
 
