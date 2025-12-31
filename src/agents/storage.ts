@@ -5,7 +5,6 @@ import {
   BackupFile,
   SecurityContext,
 } from '../types/index';
-import { ipfsAgent } from './ipfs';
 import {
   encryptWithPassword,
   decryptWithPassword,
@@ -20,47 +19,12 @@ export class StorageAgent {
   private readonly BACKUP_KEY = 'passext_backup';
   private readonly METADATA_KEY = 'passext_metadata';
   private readonly SETTINGS_KEY = 'passext_settings';
-  private useIPFS = false;
 
   private isInitialized = false;
   private masterPasswordHash: string | null = null;
 
   constructor() {
     this.initialize();
-  }
-
-  async enableIPFS(): Promise<void> {
-    try {
-      await ipfsAgent.initialize();
-      this.useIPFS = true;
-      console.info('IPFS backend enabled for passkey storage');
-    } catch (error) {
-      console.error('Failed to enable IPFS backend:', error);
-      throw new Error(`IPFS enable failed: ${error.message}`);
-    }
-  }
-
-  async disableIPFS(): Promise<void> {
-    this.useIPFS = false;
-    console.info('IPFS backend disabled, using local storage');
-  }
-
-  private async storeOnIPFS(passkey: PasskeyData, masterPassword: string): Promise<void> {
-    const serializedData = JSON.stringify(passkey);
-    const encrypted = await encryptWithPassword(serializedData, masterPassword);
-    const checksum = await createChecksum(serializedData);
-
-    const storageKey = this.getStorageKey(passkey.id);
-    const storageData = {
-      ...encrypted,
-      checksum,
-      createdAt: passkey.createdAt.getTime(),
-      lastUsed: passkey.lastUsed.getTime(),
-      backend: 'ipfs',
-    };
-
-    await chrome.storage.local.set({ [storageKey]: storageData });
-    await this.updateMetadata(passkey.id, 'add');
   }
 
   private async storeOnLocal(passkey: PasskeyData, masterPassword: string): Promise<void> {
@@ -115,12 +79,7 @@ export class StorageAgent {
 
     try {
       this.validatePasskeyData(passkey);
-
-      if (this.useIPFS) {
-        await this.storeOnIPFS(passkey, masterPassword);
-      } else {
-        await this.storeOnLocal(passkey, masterPassword);
-      }
+      await this.storeOnLocal(passkey, masterPassword);
     } catch (error) {
       console.error('Failed to store passkey:', error);
       throw new Error(`Failed to store passkey: ${error.message}`);

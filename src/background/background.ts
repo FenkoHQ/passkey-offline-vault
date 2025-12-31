@@ -5,11 +5,16 @@ import {
   deriveEd25519Keypair,
 } from '../crypto/bip39';
 import { syncService } from '../sync/sync-service';
+import { secureStorage, SecureStorageConfig } from '../crypto/secure-storage';
+import { randomBytes } from '@noble/hashes/utils';
 
 const PASSKEY_STORAGE_KEY = 'passkeys';
 const SYNC_CONFIG_KEY = 'sync_config';
 const SYNC_DEVICES_KEY = 'sync_devices';
 const SYNC_STATUS_KEY = 'sync_status';
+
+// SECURITY: Flag to track if secure storage is initialized
+// In production, this should always require user interaction to unlock
 
 interface SyncStatus {
   lastSyncAttempt: number | null;
@@ -27,6 +32,8 @@ interface SyncConfig {
   deviceId: string | null;
   deviceName: string | null;
   seedHash: string | null;
+  // SECURITY FIX: Random salt for PBKDF2 derivation
+  syncSalt: string | null;
 }
 
 interface SyncDevice {
@@ -87,11 +94,13 @@ class BackgroundService {
 
       if (config?.enabled && config.chainId && config.deviceId && config.seedHash) {
         console.log('PassKey Vault: Starting sync service...');
+        // SECURITY FIX: Pass syncSalt to sync service for random PBKDF2 derivation
         await syncService.initialize(
           config.chainId,
           config.deviceId,
           config.seedHash,
-          config.deviceName || undefined
+          config.deviceName || undefined,
+          config.syncSalt || undefined
         );
         await this.updateSyncStatus({ connectionStatus: 'connected' });
         console.log('PassKey Vault: Sync service started');
@@ -172,6 +181,17 @@ class BackgroundService {
         return this.getSyncDebugLogs();
       case 'CLEAR_SYNC_DEBUG_LOGS':
         return this.clearSyncDebugLogs();
+      // SECURITY: Secure storage message handlers for encrypted passkey storage
+      case 'SETUP_MASTER_PASSWORD':
+        return this.handleSetupMasterPassword(payload);
+      case 'UNLOCK_SECURE_STORAGE':
+        return this.handleUnlockSecureStorage(payload);
+      case 'LOCK_SECURE_STORAGE':
+        return this.handleLockSecureStorage();
+      case 'IS_SECURE_STORAGE_UNLOCKED':
+        return this.handleIsSecureStorageUnlocked();
+      case 'CHANGE_MASTER_PASSWORD':
+        return this.handleChangeMasterPassword(payload);
       default:
         throw new Error(`Unknown message type: ${type}`);
     }
@@ -1049,6 +1069,12 @@ class BackgroundService {
         .join('');
       const chainId = seedHashHex.substring(0, 32);
 
+      // SECURITY FIX: Generate random salt for PBKDF2 key derivation
+      const syncSaltBytes = randomBytes(32);
+      const syncSalt = Array.from(syncSaltBytes)
+        .map((b: number) => b.toString(16).padStart(2, '0'))
+        .join('');
+
       const newDevice: SyncDevice = {
         id: deviceId,
         name: deviceName,
@@ -1068,6 +1094,9 @@ class BackgroundService {
         devices: [newDevice],
       };
 
+      // SECURITY FIX: Store config with sync salt
+      // NOTE: In production, seedHash should be encrypted with master password
+      // using secureStorage.storeSyncConfig() after user sets up master password
       await chrome.storage.local.set({
         [SYNC_CONFIG_KEY]: {
           enabled: true,
@@ -1075,11 +1104,13 @@ class BackgroundService {
           deviceId,
           deviceName,
           seedHash: seedHashHex,
+          syncSalt,
         },
         [SYNC_DEVICES_KEY]: chain,
       });
 
-      await syncService.initialize(chainId, deviceId, seedHashHex, deviceName);
+      // Initialize sync service with the random salt
+      await syncService.initialize(chainId, deviceId, seedHashHex, deviceName, syncSalt);
       this.logSync('SYNC_CHAIN_CREATED', { chainId, deviceId });
 
       return { success: true, mnemonic, deviceId, chainId };
@@ -1100,6 +1131,12 @@ class BackgroundService {
       const deviceId = crypto.randomUUID();
       const seedHashBuffer = await crypto.subtle.digest('SHA-256', new Uint8Array(seedBytes));
       const seedHashHex = Array.from(new Uint8Array(seedHashBuffer))
+        .map((b: number) => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      // SECURITY FIX: Generate random salt for PBKDF2 key derivation
+      const syncSaltBytes = randomBytes(32);
+      const syncSalt = Array.from(syncSaltBytes)
         .map((b: number) => b.toString(16).padStart(2, '0'))
         .join('');
 
@@ -1124,12 +1161,14 @@ class BackgroundService {
         devices: [newDevice],
       };
 
+      // SECURITY FIX: Include syncSalt in config
       const config: SyncConfig = {
         enabled: true,
         chainId,
         deviceId,
         deviceName,
         seedHash: seedHashHex,
+        syncSalt,
       };
 
       await chrome.storage.local.set({
@@ -1137,7 +1176,8 @@ class BackgroundService {
         [SYNC_DEVICES_KEY]: chain,
       });
 
-      await syncService.initialize(chainId, deviceId, seedHashHex, deviceName);
+      // Initialize sync service with the random salt
+      await syncService.initialize(chainId, deviceId, seedHashHex, deviceName, syncSalt);
       await syncService.requestSync();
       this.logSync('SYNC_CHAIN_JOINED', { chainId, deviceId });
 
@@ -1152,6 +1192,7 @@ class BackgroundService {
     try {
       await syncService.disconnect();
 
+      // SECURITY FIX: Include syncSalt: null when clearing config
       await chrome.storage.local.set({
         [SYNC_CONFIG_KEY]: {
           enabled: false,
@@ -1159,6 +1200,7 @@ class BackgroundService {
           deviceId: null,
           deviceName: null,
           seedHash: null,
+          syncSalt: null,
         },
         [SYNC_DEVICES_KEY]: null,
       });
@@ -1341,11 +1383,13 @@ class BackgroundService {
       const syncStatus = syncService.getStatus();
       if (!syncStatus.connected) {
         if (config.chainId && config.deviceId && config.seedHash) {
+          // SECURITY FIX: Pass syncSalt to sync service for random PBKDF2 derivation
           await syncService.initialize(
             config.chainId,
             config.deviceId,
             config.seedHash,
-            config.deviceName || undefined
+            config.deviceName || undefined,
+            config.syncSalt || undefined
           );
         }
       }
@@ -1371,6 +1415,119 @@ class BackgroundService {
         lastError: error.message,
       });
       this.logSync('SYNC_ERROR', { error: error.message });
+    }
+  }
+
+  // ==================== SECURE STORAGE HANDLERS ====================
+  // These handlers provide secure encrypted storage for sensitive data
+  // using a master password with PBKDF2 key derivation
+
+  private async handleSetupMasterPassword(payload: { password: string }): Promise<any> {
+    try {
+      const { password } = payload;
+      if (!password || password.length < 8) {
+        return { success: false, error: 'Password must be at least 8 characters' };
+      }
+
+      // Initialize secure storage with master password
+      const unlocked = await secureStorage.initialize(password);
+      if (!unlocked) {
+        return { success: false, error: 'Failed to initialize secure storage' };
+      }
+
+      // Migrate existing sync config to secure storage if present
+      const configResult = await chrome.storage.local.get(SYNC_CONFIG_KEY);
+      const config: SyncConfig = configResult[SYNC_CONFIG_KEY];
+      if (config?.seedHash) {
+        await secureStorage.storeSyncConfig({
+          chainId: config.chainId || '',
+          deviceId: config.deviceId || '',
+          deviceName: config.deviceName || '',
+          seedHash: config.seedHash,
+          syncSalt: config.syncSalt || null,
+          enabled: config.enabled || false,
+        });
+        console.log('PassKey Vault: Migrated sync config to secure storage');
+      }
+
+      // Migrate existing passkeys to secure storage
+      const passkeysResult = await chrome.storage.local.get(PASSKEY_STORAGE_KEY);
+      const passkeys: any[] = passkeysResult[PASSKEY_STORAGE_KEY] || [];
+      for (const passkey of passkeys) {
+        await secureStorage.upsertPasskey(passkey);
+      }
+      if (passkeys.length > 0) {
+        console.log(`PassKey Vault: Migrated ${passkeys.length} passkeys to secure storage`);
+      }
+
+      return { success: true, message: 'Master password setup complete' };
+    } catch (error: any) {
+      console.error('Failed to setup master password:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  private async handleUnlockSecureStorage(payload: { password: string }): Promise<any> {
+    try {
+      const { password } = payload;
+      if (!password) {
+        return { success: false, error: 'Password is required' };
+      }
+
+      const unlocked = await secureStorage.initialize(password);
+      if (!unlocked) {
+        return { success: false, error: 'Invalid password or storage not initialized' };
+      }
+
+      return { success: true, message: 'Secure storage unlocked' };
+    } catch (error: any) {
+      console.error('Failed to unlock secure storage:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  private async handleLockSecureStorage(): Promise<any> {
+    try {
+      secureStorage.lock();
+      return { success: true, message: 'Secure storage locked' };
+    } catch (error: any) {
+      console.error('Failed to lock secure storage:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  private async handleIsSecureStorageUnlocked(): Promise<any> {
+    try {
+      const isUnlocked = secureStorage.isStorageUnlocked();
+      const isSetup = await secureStorage.isSetup();
+      return { success: true, isUnlocked, isSetup };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  private async handleChangeMasterPassword(payload: {
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<any> {
+    try {
+      const { currentPassword, newPassword } = payload;
+      if (!currentPassword || !newPassword) {
+        return { success: false, error: 'Both current and new passwords are required' };
+      }
+      if (newPassword.length < 8) {
+        return { success: false, error: 'New password must be at least 8 characters' };
+      }
+
+      const changed = await secureStorage.changeMasterPassword(currentPassword, newPassword);
+      if (!changed) {
+        return { success: false, error: 'Failed to change password - check current password' };
+      }
+
+      return { success: true, message: 'Master password changed successfully' };
+    } catch (error: any) {
+      console.error('Failed to change master password:', error);
+      return { success: false, error: error.message };
     }
   }
 }

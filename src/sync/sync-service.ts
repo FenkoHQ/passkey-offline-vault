@@ -8,6 +8,7 @@ const MIN_BROADCAST_INTERVAL = 10000; // Minimum 10s between broadcasts
 const PASSKEY_STORAGE_KEY = 'passkeys';
 const SYNC_DEVICES_KEY = 'sync_devices';
 const MAX_DEBUG_LOGS = 200;
+const MAX_PROCESSED_EVENTS = 1000; // Track last N event IDs for replay protection
 
 const NOSTR_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.nostr.band'];
 
@@ -27,6 +28,8 @@ export interface SyncMessage {
   deviceType?: string;
   timestamp: number;
   payload: any;
+  // Add sequence number for ordering
+  sequence?: number;
 }
 
 export interface EncryptedPasskeyBundle {
@@ -35,7 +38,9 @@ export interface EncryptedPasskeyBundle {
   timestamp: number;
   nonce: string;
   ciphertext: string;
-  passkeyIds: string[];
+  // SECURITY FIX: Removed passkeyIds from outside encrypted payload
+  // passkeyIds are now only inside the encrypted ciphertext
+  passkeyCount: number; // Only expose count, not IDs
 }
 
 export class SyncService {
@@ -44,6 +49,7 @@ export class SyncService {
   private deviceId: string | null = null;
   private deviceName: string | null = null;
   private seedHash: string | null = null;
+  private syncSalt: string | null = null; // SECURITY FIX: Random salt for PBKDF2
   private encryptionKey: CryptoKey | null = null;
   private nostrPrivateKey: Uint8Array | null = null;
   private nostrPublicKey: string | null = null;
@@ -56,6 +62,8 @@ export class SyncService {
   private debugLogs: DebugLogEntry[] = [];
   private lastBroadcastTime = 0;
   private knownDevices = new Set<string>(); // Track devices we've already seen
+  private processedEventIds = new Set<string>(); // SECURITY FIX: Replay protection
+  private messageSequence = 0; // SECURITY FIX: Sequence numbers for ordering
 
   private log(level: DebugLogEntry['level'], category: string, message: string, data?: any): void {
     const entry: DebugLogEntry = {
@@ -63,7 +71,8 @@ export class SyncService {
       level,
       category,
       message,
-      data,
+      // SECURITY FIX: Sanitize logged data to avoid exposing sensitive info
+      data: this.sanitizeLogData(data),
     };
     this.debugLogs.push(entry);
     if (this.debugLogs.length > MAX_DEBUG_LOGS) {
@@ -79,6 +88,37 @@ export class SyncService {
     }
   }
 
+  // SECURITY FIX: Sanitize data before logging to avoid exposing sensitive information
+  private sanitizeLogData(data: any): any {
+    if (!data) return data;
+    if (typeof data !== 'object') return data;
+
+    const sanitized = { ...data };
+    const sensitiveKeys = [
+      'seedHash',
+      'privateKey',
+      'encryptionKey',
+      'nostrPrivateKey',
+      'mnemonic',
+      'seed',
+    ];
+
+    for (const key of sensitiveKeys) {
+      if (key in sanitized) {
+        sanitized[key] = '[REDACTED]';
+      }
+    }
+
+    // Truncate long strings that might be keys
+    for (const [key, value] of Object.entries(sanitized)) {
+      if (typeof value === 'string' && value.length > 64) {
+        sanitized[key] = value.substring(0, 8) + '...[truncated]';
+      }
+    }
+
+    return sanitized;
+  }
+
   getDebugLogs(): DebugLogEntry[] {
     return [...this.debugLogs];
   }
@@ -88,20 +128,20 @@ export class SyncService {
   }
 
   getDebugInfo(): any {
+    // SECURITY FIX: Reduced exposure of sensitive data
     return {
-      chainId: this.chainId,
-      deviceId: this.deviceId,
+      chainId: this.chainId ? this.chainId.substring(0, 8) + '...' : null,
+      deviceId: this.deviceId ? this.deviceId.substring(0, 8) + '...' : null,
       deviceName: this.deviceName,
-      seedHashPrefix: this.seedHash ? this.seedHash.substring(0, 16) + '...' : null,
       isConnected: this.isConnected,
       currentRelay: NOSTR_RELAYS[this.currentRelayIndex],
       currentRelayIndex: this.currentRelayIndex,
-      subId: this.subId,
       wsReadyState: this.ws?.readyState,
       hasEncryptionKey: !!this.encryptionKey,
       hasNostrKeys: !!this.nostrPrivateKey && !!this.nostrPublicKey,
-      nostrPubkey: this.nostrPublicKey ? this.nostrPublicKey.substring(0, 16) + '...' : null,
       logsCount: this.debugLogs.length,
+      processedEventsCount: this.processedEventIds.size,
+      messageSequence: this.messageSequence,
     };
   }
 
@@ -109,7 +149,8 @@ export class SyncService {
     chainId: string,
     deviceId: string,
     seedHash: string,
-    deviceName?: string
+    deviceName?: string,
+    syncSalt?: string // SECURITY FIX: Accept random salt
   ): Promise<void> {
     if (this.chainId === chainId && this.isConnected) {
       this.log('info', 'init', 'Already initialized for this chain');
@@ -120,12 +161,13 @@ export class SyncService {
     this.deviceId = deviceId;
     this.seedHash = seedHash;
     this.deviceName = deviceName || 'Unknown Device';
+    this.syncSalt = syncSalt || null;
 
     this.log('info', 'init', 'Initializing sync service', {
-      chainId,
+      chainId: chainId.substring(0, 8) + '...',
       deviceId: deviceId.substring(0, 8) + '...',
       deviceName: this.deviceName,
-      seedHashPrefix: seedHash.substring(0, 16) + '...',
+      hasSyncSalt: !!syncSalt,
     });
 
     await this.deriveKeys(seedHash);
@@ -133,9 +175,10 @@ export class SyncService {
 
     await this.connectWithRetry();
 
-    this.log('info', 'init', 'Initialized for chain', { chainId });
+    this.log('info', 'init', 'Initialized for chain', { chainId: chainId.substring(0, 8) + '...' });
   }
 
+  // SECURITY FIX: Use random or chain-derived salt instead of static strings
   private async deriveKeys(seedHash: string): Promise<void> {
     const encoder = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey(
@@ -146,11 +189,21 @@ export class SyncService {
       ['deriveKey', 'deriveBits']
     );
 
+    // SECURITY FIX: Use chain-derived salt if no random salt provided
+    // This ensures different chains get different keys even with static fallback
+    const encryptionSalt = this.syncSalt
+      ? encoder.encode(this.syncSalt)
+      : encoder.encode(`pkvault-sync-${this.chainId}-enc`);
+
+    const nostrSalt = this.syncSalt
+      ? encoder.encode(this.syncSalt + '-nostr')
+      : encoder.encode(`pkvault-sync-${this.chainId}-nostr`);
+
     // Derive AES encryption key for message encryption
     this.encryptionKey = await crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
-        salt: encoder.encode('passkey-vault-sync-v1'),
+        salt: encryptionSalt,
         iterations: 100000,
         hash: 'SHA-256',
       },
@@ -161,11 +214,10 @@ export class SyncService {
     );
 
     // Derive secp256k1 private key for Nostr signing
-    // Use PBKDF2 to derive 32 bytes for the private key
     const nostrKeyBits = await crypto.subtle.deriveBits(
       {
         name: 'PBKDF2',
-        salt: encoder.encode('passkey-vault-nostr-v1'),
+        salt: nostrSalt,
         iterations: 100000,
         hash: 'SHA-256',
       },
@@ -180,7 +232,7 @@ export class SyncService {
     this.nostrPublicKey = bytesToHex(xOnlyPubKey);
 
     this.log('info', 'crypto', 'Derived Nostr keypair', {
-      pubkey: this.nostrPublicKey.substring(0, 16) + '...',
+      pubkeyPrefix: this.nostrPublicKey.substring(0, 8) + '...',
     });
   }
 
@@ -324,7 +376,7 @@ export class SyncService {
     this.log('info', 'nostr', 'Subscribed to chain events', {
       subId: this.subId,
       filter,
-      chainId: this.chainId,
+      chainId: this.chainId.substring(0, 8) + '...',
     });
   }
 
@@ -336,6 +388,7 @@ export class SyncService {
       deviceName: this.deviceName || undefined,
       deviceType: this.getDeviceType(),
       timestamp: Date.now(),
+      sequence: ++this.messageSequence,
       payload: {
         action: 'online',
       },
@@ -365,7 +418,33 @@ export class SyncService {
 
       if (msgType === 'EVENT' && parsed[2]) {
         const event = parsed[2];
-        this.log('debug', 'nostr', 'Received EVENT', {
+
+        // SECURITY FIX: Verify Nostr event signature before processing
+        const isValidSignature = await this.verifyNostrEventSignature(event);
+        if (!isValidSignature) {
+          this.log('warn', 'nostr', 'Rejected event with invalid signature', {
+            eventId: event.id?.substring(0, 8),
+          });
+          return;
+        }
+
+        // SECURITY FIX: Replay protection - check if we've seen this event
+        if (this.processedEventIds.has(event.id)) {
+          this.log('debug', 'nostr', 'Ignoring already processed event', {
+            eventId: event.id?.substring(0, 8),
+          });
+          return;
+        }
+
+        // Track processed events (with size limit)
+        this.processedEventIds.add(event.id);
+        if (this.processedEventIds.size > MAX_PROCESSED_EVENTS) {
+          // Remove oldest entries (convert to array, slice, convert back)
+          const entries = Array.from(this.processedEventIds);
+          this.processedEventIds = new Set(entries.slice(-MAX_PROCESSED_EVENTS / 2));
+        }
+
+        this.log('debug', 'nostr', 'Received verified EVENT', {
           eventId: event.id?.substring(0, 8),
           pubkey: event.pubkey?.substring(0, 8),
           kind: event.kind,
@@ -383,6 +462,7 @@ export class SyncService {
                 type: syncMsg.type,
                 fromDevice: syncMsg.deviceId?.substring(0, 8),
                 deviceName: syncMsg.deviceName,
+                sequence: syncMsg.sequence,
               });
               await this.processSyncMessage(syncMsg);
             }
@@ -404,17 +484,68 @@ export class SyncService {
         }
       } else if (msgType === 'EOSE') {
         this.log('info', 'nostr', 'End of stored events');
-        // Don't auto-request sync - our presence announcement will trigger peers to share
       } else if (msgType === 'NOTICE') {
         this.log('info', 'nostr', 'Relay notice', { notice: parsed[1] });
       } else {
         this.log('debug', 'nostr', 'Unknown message type', {
           msgType,
-          data: data.substring(0, 100),
+          dataPreview: data.substring(0, 50),
         });
       }
     } catch (error) {
       // Silently ignore parse errors for non-JSON messages
+    }
+  }
+
+  // SECURITY FIX: Verify Nostr event BIP340 Schnorr signature
+  private async verifyNostrEventSignature(event: any): Promise<boolean> {
+    try {
+      if (
+        !event.id ||
+        !event.pubkey ||
+        !event.sig ||
+        !event.created_at ||
+        event.kind === undefined
+      ) {
+        return false;
+      }
+
+      // Reconstruct event data for hashing (NIP-01 format)
+      const eventData = [
+        0,
+        event.pubkey,
+        event.created_at,
+        event.kind,
+        event.tags || [],
+        event.content || '',
+      ];
+      const eventJson = JSON.stringify(eventData);
+      const eventHash = sha256(new TextEncoder().encode(eventJson));
+      const expectedId = bytesToHex(eventHash);
+
+      // Verify event ID matches hash
+      if (event.id !== expectedId) {
+        this.log('warn', 'crypto', 'Event ID mismatch', {
+          expected: expectedId.substring(0, 8),
+          received: event.id.substring(0, 8),
+        });
+        return false;
+      }
+
+      // Verify BIP340 Schnorr signature
+      const sigBytes = hexToBytes(event.sig);
+      const pubkeyBytes = hexToBytes(event.pubkey);
+
+      const isValid = await secp256k1.schnorr.verify(sigBytes, eventHash, pubkeyBytes);
+
+      if (!isValid) {
+        this.log('warn', 'crypto', 'Invalid Schnorr signature');
+      }
+
+      return isValid;
+    } catch (error: any) {
+      this.log('error', 'crypto', 'Signature verification failed', { error: error.message });
+      return false;
     }
   }
 
@@ -423,6 +554,7 @@ export class SyncService {
       type: msg.type,
       from: msg.deviceId?.substring(0, 8),
       deviceName: msg.deviceName,
+      sequence: msg.sequence,
     });
 
     await this.updateRemoteDevice(msg);
@@ -495,7 +627,6 @@ export class SyncService {
 
   private async handlePeerOnline(msg: SyncMessage): Promise<void> {
     // Only share passkeys with NEW devices we haven't seen before
-    // This prevents broadcast storms when multiple devices are online
     if (this.knownDevices.has(msg.deviceId)) {
       this.log('debug', 'sync', 'Peer already known, skipping passkey share', {
         peer: msg.deviceId?.substring(0, 8),
@@ -538,6 +669,7 @@ export class SyncService {
       deviceName: this.deviceName || undefined,
       deviceType: this.getDeviceType(),
       timestamp: Date.now(),
+      sequence: ++this.messageSequence,
       payload: {
         requestId: msg.payload.requestId,
         bundle,
@@ -554,10 +686,10 @@ export class SyncService {
       try {
         this.log('info', 'sync', 'Received passkey bundle', {
           from: msg.deviceId?.substring(0, 8),
-          passkeyIds: bundle.passkeyIds,
+          passkeyCount: bundle.passkeyCount,
         });
         const remotePasskeys = await this.decryptBundle(bundle);
-        await this.mergePasskeys(remotePasskeys);
+        await this.mergePasskeys(remotePasskeys, msg.deviceId);
       } catch (error: any) {
         this.log('error', 'sync', 'Failed to decrypt/merge bundle', { error: error.message });
       }
@@ -577,6 +709,7 @@ export class SyncService {
       deviceName: this.deviceName || undefined,
       deviceType: this.getDeviceType(),
       timestamp: Date.now(),
+      sequence: ++this.messageSequence,
       payload: {
         action: 'sync',
         requestId: crypto.randomUUID(),
@@ -609,6 +742,7 @@ export class SyncService {
       deviceName: this.deviceName || undefined,
       deviceType: this.getDeviceType(),
       timestamp: Date.now(),
+      sequence: ++this.messageSequence,
       payload: { bundle },
     };
 
@@ -647,7 +781,6 @@ export class SyncService {
     } catch (error: any) {
       this.log('error', 'nostr', 'Failed to broadcast message', {
         error: error?.message || String(error),
-        stack: error?.stack,
       });
     }
   }
@@ -669,8 +802,7 @@ export class SyncService {
     const eventHash = sha256(new TextEncoder().encode(eventJson));
     const id = bytesToHex(eventHash);
 
-    // Sign the event ID with BIP340 Schnorr signature (required by Nostr)
-    // Use signAsync for better browser compatibility
+    // Sign the event ID with BIP340 Schnorr signature
     const sig = await secp256k1.schnorr.signAsync(eventHash, this.nostrPrivateKey);
     const sigHex = bytesToHex(sig);
 
@@ -735,13 +867,22 @@ export class SyncService {
     }
   }
 
+  // SECURITY FIX: passkeyIds no longer exposed outside encrypted payload
   private async createEncryptedBundle(passkeys: any[]): Promise<EncryptedPasskeyBundle> {
     if (!this.encryptionKey) {
       throw new Error('Encryption key not initialized');
     }
 
+    // Include passkeyIds INSIDE the encrypted payload
+    const bundlePayload = {
+      passkeys,
+      passkeyIds: passkeys.map((p) => p.id),
+      timestamp: Date.now(),
+      deviceId: this.deviceId,
+    };
+
     const encoder = new TextEncoder();
-    const data = encoder.encode(JSON.stringify(passkeys));
+    const data = encoder.encode(JSON.stringify(bundlePayload));
     const nonce = crypto.getRandomValues(new Uint8Array(12));
 
     const ciphertext = await crypto.subtle.encrypt(
@@ -751,12 +892,13 @@ export class SyncService {
     );
 
     return {
-      version: '1.0',
+      version: '2.0', // Version bump for new format
       deviceId: this.deviceId!,
       timestamp: Date.now(),
       nonce: this.arrayBufferToBase64(nonce),
       ciphertext: this.arrayBufferToBase64(ciphertext),
-      passkeyIds: passkeys.map((p) => p.id),
+      // SECURITY FIX: Only expose count, not individual IDs
+      passkeyCount: passkeys.length,
     };
   }
 
@@ -775,7 +917,13 @@ export class SyncService {
     );
 
     const decoder = new TextDecoder();
-    return JSON.parse(decoder.decode(decrypted));
+    const payload = JSON.parse(decoder.decode(decrypted));
+
+    // Handle both old format (direct passkeys array) and new format (bundlePayload object)
+    if (Array.isArray(payload)) {
+      return payload; // Old format - direct passkeys array
+    }
+    return payload.passkeys || []; // New format - extract passkeys from payload
   }
 
   private async getLocalPasskeys(): Promise<any[]> {
@@ -783,7 +931,8 @@ export class SyncService {
     return result[PASSKEY_STORAGE_KEY] || [];
   }
 
-  private async mergePasskeys(remotePasskeys: any[]): Promise<void> {
+  // SECURITY FIX: Improved merge with source device tracking
+  private async mergePasskeys(remotePasskeys: any[], sourceDeviceId: string): Promise<void> {
     const localPasskeys = await this.getLocalPasskeys();
     const localMap = new Map(localPasskeys.map((p) => [p.id, p]));
 
@@ -793,12 +942,16 @@ export class SyncService {
     this.log('info', 'merge', 'Merging passkeys', {
       localCount: localPasskeys.length,
       remoteCount: remotePasskeys.length,
+      sourceDevice: sourceDeviceId.substring(0, 8),
     });
 
     for (const remote of remotePasskeys) {
       const local = localMap.get(remote.id);
 
       if (!local) {
+        // New passkey - add it with source tracking
+        remote.syncSource = sourceDeviceId;
+        remote.syncTimestamp = Date.now();
         localMap.set(remote.id, remote);
         addedCount++;
         this.log('info', 'merge', 'Added new passkey', {
@@ -806,6 +959,9 @@ export class SyncService {
           rpId: remote.rpId,
         });
       } else if (remote.createdAt > local.createdAt) {
+        // Remote is newer - update with source tracking
+        remote.syncSource = sourceDeviceId;
+        remote.syncTimestamp = Date.now();
         localMap.set(remote.id, remote);
         updatedCount++;
         this.log('info', 'merge', 'Updated passkey (newer)', {
@@ -873,10 +1029,23 @@ export class SyncService {
       this.ws = null;
     }
 
+    // SECURITY FIX: Wipe sensitive keys from memory
+    if (this.nostrPrivateKey) {
+      crypto.getRandomValues(this.nostrPrivateKey);
+      this.nostrPrivateKey.fill(0);
+      this.nostrPrivateKey = null;
+    }
+    this.encryptionKey = null;
+    this.seedHash = null;
+    this.syncSalt = null;
+
     this.chainId = null;
     this.deviceId = null;
     this.isConnected = false;
     this.connectionPromise = null;
+    this.processedEventIds.clear();
+    this.messageSequence = 0;
+
     this.log('info', 'ws', 'Disconnected');
   }
 }
