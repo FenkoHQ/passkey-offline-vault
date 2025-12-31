@@ -3,7 +3,8 @@ import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 
 const RECONNECT_DELAY = 5000;
-const HEARTBEAT_INTERVAL = 30000;
+const HEARTBEAT_INTERVAL = 300000; // 5 minutes - relays rate limit aggressively
+const MIN_BROADCAST_INTERVAL = 10000; // Minimum 10s between broadcasts
 const PASSKEY_STORAGE_KEY = 'passkeys';
 const SYNC_DEVICES_KEY = 'sync_devices';
 const MAX_DEBUG_LOGS = 200;
@@ -53,6 +54,8 @@ export class SyncService {
   private subId: string | null = null;
   private connectionPromise: Promise<void> | null = null;
   private debugLogs: DebugLogEntry[] = [];
+  private lastBroadcastTime = 0;
+  private knownDevices = new Set<string>(); // Track devices we've already seen
 
   private log(level: DebugLogEntry['level'], category: string, message: string, data?: any): void {
     const entry: DebugLogEntry = {
@@ -400,8 +403,8 @@ export class SyncService {
           });
         }
       } else if (msgType === 'EOSE') {
-        this.log('info', 'nostr', 'End of stored events, requesting sync from peers');
-        this.requestSync();
+        this.log('info', 'nostr', 'End of stored events');
+        // Don't auto-request sync - our presence announcement will trigger peers to share
       } else if (msgType === 'NOTICE') {
         this.log('info', 'nostr', 'Relay notice', { notice: parsed[1] });
       } else {
@@ -491,10 +494,21 @@ export class SyncService {
   }
 
   private async handlePeerOnline(msg: SyncMessage): Promise<void> {
-    this.log('info', 'sync', 'Peer came online, sharing passkeys', {
+    // Only share passkeys with NEW devices we haven't seen before
+    // This prevents broadcast storms when multiple devices are online
+    if (this.knownDevices.has(msg.deviceId)) {
+      this.log('debug', 'sync', 'Peer already known, skipping passkey share', {
+        peer: msg.deviceId?.substring(0, 8),
+      });
+      return;
+    }
+
+    this.knownDevices.add(msg.deviceId);
+    this.log('info', 'sync', 'New peer discovered, sharing passkeys', {
       peer: msg.deviceId?.substring(0, 8),
       peerName: msg.deviceName,
     });
+
     const passkeys = await this.getLocalPasskeys();
     if (passkeys.length > 0) {
       await this.broadcastPasskeyUpdate(passkeys);
@@ -602,13 +616,24 @@ export class SyncService {
     this.log('info', 'sync', 'Broadcasted passkey update', { passkeyCount: passkeys.length });
   }
 
-  private async broadcastMessage(msg: SyncMessage): Promise<void> {
+  private async broadcastMessage(msg: SyncMessage, bypassRateLimit = false): Promise<void> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.log('warn', 'ws', 'WebSocket not ready for broadcast', {
         readyState: this.ws?.readyState,
       });
       return;
     }
+
+    // Rate limiting - prevent broadcast storms
+    const now = Date.now();
+    if (!bypassRateLimit && now - this.lastBroadcastTime < MIN_BROADCAST_INTERVAL) {
+      this.log('debug', 'nostr', 'Rate limited, skipping broadcast', {
+        msgType: msg.type,
+        timeSinceLastMs: now - this.lastBroadcastTime,
+      });
+      return;
+    }
+    this.lastBroadcastTime = now;
 
     try {
       const encrypted = await this.encryptMessage(msg);
