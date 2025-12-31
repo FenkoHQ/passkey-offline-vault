@@ -5,8 +5,31 @@
  * and communicate with the background script.
  */
 
-// Note: showPasskeySelector, showPasskeyCreatedNotification, showPasskeyUsedNotification,
-// showErrorNotification, and PasskeyOption are provided by passkey-ui.ts (concatenated during build)
+interface PasskeyOption {
+  id: string;
+  credentialId: string;
+  userName: string;
+  userDisplayName: string;
+  rpId: string;
+  createdAt: number;
+}
+
+const _showPasskeySelector = (window as any).showPasskeySelector as (
+  options: PasskeyOption[],
+  rpId: string
+) => Promise<string | null>;
+const _showPasskeyCreatedNotification = (window as any).showPasskeyCreatedNotification as (
+  userName: string,
+  rpId: string
+) => void;
+const _showPasskeyUsedNotification = (window as any).showPasskeyUsedNotification as (
+  userName: string,
+  rpId: string
+) => void;
+const _showErrorNotification = (window as any).showErrorNotification as (
+  title: string,
+  message: string
+) => void;
 
 class ContentScript {
   private isInjected = false;
@@ -97,7 +120,7 @@ class ContentScript {
             payload.publicKey?.rpId ||
             payload.publicKey?.rp?.id ||
             new URL(payload.origin).hostname;
-          showPasskeyCreatedNotification(userName, rpId);
+          _showPasskeyCreatedNotification(userName, rpId);
 
           // Reconstruct a proper PublicKeyCredential object
           const credential = this.createCredentialFromResponse(response.credential, 'create');
@@ -113,7 +136,7 @@ class ContentScript {
         } else {
           // Show error if it's not a duplicate passkey error
           if (response.name !== 'InvalidStateError') {
-            showErrorNotification('Passkey Error', response.error || 'Failed to create passkey');
+            _showErrorNotification('Passkey Error', response.error || 'Failed to create passkey');
           }
           window.postMessage(
             {
@@ -126,7 +149,7 @@ class ContentScript {
           );
         }
       } catch (error: any) {
-        showErrorNotification('Passkey Error', error.message || 'Failed to create passkey');
+        _showErrorNotification('Passkey Error', error.message || 'Failed to create passkey');
         window.postMessage(
           {
             source: 'PASSKEY_VAULT_CONTENT',
@@ -178,7 +201,7 @@ class ContentScript {
         }));
 
         // Show passkey selector UI
-        const selectedId = await showPasskeySelector(passkeyOptions, rpId);
+        const selectedId = await _showPasskeySelector(passkeyOptions, rpId);
 
         if (!selectedId) {
           // User cancelled
@@ -213,7 +236,7 @@ class ContentScript {
           // Show success notification
           const selectedPasskey = passkeyOptions.find((pk) => pk.id === selectedId);
           const userName = selectedPasskey?.userDisplayName || selectedPasskey?.userName || 'User';
-          showPasskeyUsedNotification(userName, rpId);
+          _showPasskeyUsedNotification(userName, rpId);
 
           // Reconstruct a proper PublicKeyCredential object
           const credential = this.createCredentialFromResponse(response.credential, 'get');
@@ -227,7 +250,7 @@ class ContentScript {
             '*'
           );
         } else {
-          showErrorNotification('Sign In Failed', response.error || 'Failed to use passkey');
+          _showErrorNotification('Sign In Failed', response.error || 'Failed to use passkey');
           window.postMessage(
             {
               source: 'PASSKEY_VAULT_CONTENT',
@@ -239,7 +262,7 @@ class ContentScript {
           );
         }
       } catch (error: any) {
-        showErrorNotification('Sign In Failed', error.message || 'Failed to use passkey');
+        _showErrorNotification('Sign In Failed', error.message || 'Failed to use passkey');
         window.postMessage(
           {
             source: 'PASSKEY_VAULT_CONTENT',

@@ -527,3 +527,8 @@ function escapeHtml(str: string): string {
   div.textContent = str;
   return div.innerHTML;
 }
+
+(window as any).showPasskeySelector = showPasskeySelector;
+(window as any).showPasskeyCreatedNotification = showPasskeyCreatedNotification;
+(window as any).showPasskeyUsedNotification = showPasskeyUsedNotification;
+(window as any).showErrorNotification = showErrorNotification;

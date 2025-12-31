@@ -117,6 +117,9 @@ class BackgroundService {
         case 'GET_PASSKEYS':
           return await this.getStoredPasskeys();
 
+        case 'LIST_PASSKEYS_FOR_RP':
+          return await this.listPasskeysForRP(message.payload?.rpId);
+
         case 'STORE_PASSKEY':
           return await this.storePasskey(message.passkey, message.masterPassword);
 
@@ -168,6 +171,18 @@ class BackgroundService {
       return { success: true, passkeys };
     } catch (error) {
       console.error('Failed to get passkeys:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  private async listPasskeysForRP(rpId: string): Promise<any> {
+    try {
+      const result = await chrome.storage.local.get('passkeys');
+      const passkeys = result.passkeys || [];
+      const filtered = passkeys.filter((pk: any) => pk.rpId === rpId);
+      return { success: true, passkeys: filtered };
+    } catch (error) {
+      console.error('Failed to list passkeys for RP:', error);
       return { success: false, error: error.message };
     }
   }
