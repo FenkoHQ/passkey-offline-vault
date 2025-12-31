@@ -87,7 +87,12 @@ class BackgroundService {
 
       if (config?.enabled && config.chainId && config.deviceId && config.seedHash) {
         console.log('PassKey Vault: Starting sync service...');
-        await syncService.initialize(config.chainId, config.deviceId, config.seedHash);
+        await syncService.initialize(
+          config.chainId,
+          config.deviceId,
+          config.seedHash,
+          config.deviceName || undefined
+        );
         await this.updateSyncStatus({ connectionStatus: 'connected' });
         console.log('PassKey Vault: Sync service started');
       }
@@ -161,6 +166,12 @@ class BackgroundService {
         return this.getSyncStatus();
       case 'TRIGGER_SYNC':
         return this.handleTriggerSync();
+      case 'GET_SYNC_DEBUG_INFO':
+        return this.getSyncDebugInfo();
+      case 'GET_SYNC_DEBUG_LOGS':
+        return this.getSyncDebugLogs();
+      case 'CLEAR_SYNC_DEBUG_LOGS':
+        return this.clearSyncDebugLogs();
       default:
         throw new Error(`Unknown message type: ${type}`);
     }
@@ -1068,7 +1079,7 @@ class BackgroundService {
         [SYNC_DEVICES_KEY]: chain,
       });
 
-      await syncService.initialize(chainId, deviceId, seedHashHex);
+      await syncService.initialize(chainId, deviceId, seedHashHex, deviceName);
       this.logSync('SYNC_CHAIN_CREATED', { chainId, deviceId });
 
       return { success: true, mnemonic, deviceId, chainId };
@@ -1126,7 +1137,7 @@ class BackgroundService {
         [SYNC_DEVICES_KEY]: chain,
       });
 
-      await syncService.initialize(chainId, deviceId, seedHashHex);
+      await syncService.initialize(chainId, deviceId, seedHashHex, deviceName);
       await syncService.requestSync();
       this.logSync('SYNC_CHAIN_JOINED', { chainId, deviceId });
 
@@ -1277,6 +1288,33 @@ class BackgroundService {
     return { success: true };
   }
 
+  private async getSyncDebugInfo(): Promise<any> {
+    try {
+      const debugInfo = syncService.getDebugInfo();
+      return { success: true, debugInfo };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  private async getSyncDebugLogs(): Promise<any> {
+    try {
+      const logs = syncService.getDebugLogs();
+      return { success: true, logs };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  private async clearSyncDebugLogs(): Promise<any> {
+    try {
+      syncService.clearDebugLogs();
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
   private async triggerSync(): Promise<void> {
     const configResult = await chrome.storage.local.get(SYNC_CONFIG_KEY);
     const config: SyncConfig = configResult[SYNC_CONFIG_KEY];
@@ -1303,7 +1341,12 @@ class BackgroundService {
       const syncStatus = syncService.getStatus();
       if (!syncStatus.connected) {
         if (config.chainId && config.deviceId && config.seedHash) {
-          await syncService.initialize(config.chainId, config.deviceId, config.seedHash);
+          await syncService.initialize(
+            config.chainId,
+            config.deviceId,
+            config.seedHash,
+            config.deviceName || undefined
+          );
         }
       }
 

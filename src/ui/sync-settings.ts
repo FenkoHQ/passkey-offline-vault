@@ -23,10 +23,71 @@ interface SyncStatusResponse {
   syncedPasskeyCount: number;
 }
 
+interface DebugLogEntry {
+  timestamp: number;
+  level: 'info' | 'warn' | 'error' | 'debug';
+  category: string;
+  message: string;
+  data?: any;
+}
+
+let autoRefreshInterval: ReturnType<typeof setInterval> | null = null;
+
 document.addEventListener('DOMContentLoaded', () => {
   loadSyncConfig();
   setupEventListeners();
+  setupTabNavigation();
 });
+
+function setupTabNavigation(): void {
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  tabBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tabName = (btn as HTMLElement).dataset.tab;
+      if (!tabName) return;
+
+      // Update active button
+      tabBtns.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Update active content
+      document.querySelectorAll('.tab-content').forEach((content) => {
+        content.classList.remove('active');
+      });
+      const tabContent = document.getElementById(`tab-${tabName}`);
+      if (tabContent) {
+        tabContent.classList.add('active');
+      }
+
+      // Load debug data when switching to debug tab
+      if (tabName === 'debug') {
+        loadDebugInfo();
+        startAutoRefresh();
+      } else {
+        stopAutoRefresh();
+      }
+
+      // Load devices when switching to devices tab
+      if (tabName === 'devices') {
+        loadDevicesList();
+      }
+    });
+  });
+}
+
+function startAutoRefresh(): void {
+  stopAutoRefresh();
+  autoRefreshInterval = setInterval(() => {
+    loadDebugInfo();
+  }, 2000);
+}
+
+function stopAutoRefresh(): void {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+  }
+}
 
 function setupEventListeners(): void {
   const backBtn = document.getElementById('back-btn') as HTMLButtonElement;
@@ -34,6 +95,8 @@ function setupEventListeners(): void {
   const leaveChainBtn = document.getElementById('leave-chain-btn') as HTMLButtonElement;
   const setupSyncBtn = document.getElementById('setup-sync-btn') as HTMLButtonElement;
   const manualSyncBtn = document.getElementById('manual-sync-btn') as HTMLButtonElement;
+  const refreshDebugBtn = document.getElementById('refresh-debug-btn') as HTMLButtonElement;
+  const clearLogsBtn = document.getElementById('clear-logs-btn') as HTMLButtonElement;
 
   if (backBtn) {
     backBtn.addEventListener('click', () => {
@@ -59,6 +122,14 @@ function setupEventListeners(): void {
 
   if (manualSyncBtn) {
     manualSyncBtn.addEventListener('click', triggerManualSync);
+  }
+
+  if (refreshDebugBtn) {
+    refreshDebugBtn.addEventListener('click', loadDebugInfo);
+  }
+
+  if (clearLogsBtn) {
+    clearLogsBtn.addEventListener('click', clearDebugLogs);
   }
 }
 
@@ -351,4 +422,92 @@ function escapeHtml(text: string): string {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+async function loadDebugInfo(): Promise<void> {
+  const debugInfoEl = document.getElementById('debug-info');
+  const debugLogsEl = document.getElementById('debug-logs');
+
+  try {
+    // Load debug info
+    const infoResult = await chrome.runtime.sendMessage({ type: 'GET_SYNC_DEBUG_INFO' });
+    if (debugInfoEl) {
+      if (infoResult.success) {
+        debugInfoEl.innerHTML = `<pre>${formatDebugInfo(infoResult.debugInfo)}</pre>`;
+      } else {
+        debugInfoEl.innerHTML = `<pre class="error">Error: ${infoResult.error}</pre>`;
+      }
+    }
+
+    // Load debug logs
+    const logsResult = await chrome.runtime.sendMessage({ type: 'GET_SYNC_DEBUG_LOGS' });
+    if (debugLogsEl) {
+      if (logsResult.success) {
+        debugLogsEl.innerHTML = formatDebugLogs(logsResult.logs);
+      } else {
+        debugLogsEl.innerHTML = `<pre class="error">Error: ${logsResult.error}</pre>`;
+      }
+    }
+  } catch (error) {
+    if (debugInfoEl) {
+      debugInfoEl.innerHTML = `<pre class="error">Failed to load debug info: ${error}</pre>`;
+    }
+  }
+}
+
+function formatDebugInfo(info: any): string {
+  const wsStateMap: Record<number, string> = {
+    0: 'CONNECTING',
+    1: 'OPEN',
+    2: 'CLOSING',
+    3: 'CLOSED',
+  };
+
+  const lines = [
+    `Chain ID:        ${info.chainId || 'Not set'}`,
+    `Device ID:       ${info.deviceId || 'Not set'}`,
+    `Device Name:     ${info.deviceName || 'Not set'}`,
+    `Seed Hash:       ${info.seedHashPrefix || 'Not set'}`,
+    ``,
+    `Connected:       ${info.isConnected ? 'YES' : 'NO'}`,
+    `Current Relay:   ${info.currentRelay || 'None'}`,
+    `Relay Index:     ${info.currentRelayIndex}`,
+    `WebSocket State: ${wsStateMap[info.wsReadyState] || info.wsReadyState}`,
+    `Subscription ID: ${info.subId || 'None'}`,
+    ``,
+    `Encryption Key:  ${info.hasEncryptionKey ? 'Derived' : 'Not derived'}`,
+    `Signing Key:     ${info.hasSigningKey ? 'Derived' : 'Not derived'}`,
+    ``,
+    `Total Logs:      ${info.logsCount}`,
+  ];
+
+  return lines.join('\n');
+}
+
+function formatDebugLogs(logs: DebugLogEntry[]): string {
+  if (!logs || logs.length === 0) {
+    return '<pre class="empty">No logs yet. Try clicking "Sync Now" to generate activity.</pre>';
+  }
+
+  const logLines = logs
+    .slice(-100) // Last 100 logs
+    .reverse() // Newest first
+    .map((log) => {
+      const time = new Date(log.timestamp).toLocaleTimeString();
+      const levelClass = `log-${log.level}`;
+      const dataStr = log.data ? ` ${JSON.stringify(log.data)}` : '';
+      return `<div class="log-entry ${levelClass}"><span class="log-time">${time}</span> <span class="log-category">[${log.category}]</span> <span class="log-msg">${escapeHtml(log.message)}</span><span class="log-data">${escapeHtml(dataStr)}</span></div>`;
+    })
+    .join('');
+
+  return `<div class="log-container">${logLines}</div>`;
+}
+
+async function clearDebugLogs(): Promise<void> {
+  try {
+    await chrome.runtime.sendMessage({ type: 'CLEAR_SYNC_DEBUG_LOGS' });
+    await loadDebugInfo();
+  } catch (error) {
+    console.error('Failed to clear logs:', error);
+  }
 }

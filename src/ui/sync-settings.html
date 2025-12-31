@@ -42,63 +42,96 @@
           </div>
         </div>
 
-        <section class="sync-overview">
-          <h2>Sync Status</h2>
-          <div class="status-grid">
-            <div class="status-item">
-              <div class="status-label">Connection</div>
-              <div id="connection-status" class="status-value">--</div>
-            </div>
-            <div class="status-item">
-              <div class="status-label">Local Passkeys</div>
-              <div id="local-count" class="status-value">--</div>
-            </div>
-            <div class="status-item">
-              <div class="status-label">Synced Passkeys</div>
-              <div id="synced-count" class="status-value">--</div>
-            </div>
-            <div class="status-item">
-              <div class="status-label">Pending Changes</div>
-              <div id="pending-changes" class="status-value">--</div>
-            </div>
-            <div class="status-item">
-              <div class="status-label">Last Sync</div>
-              <div id="last-sync" class="status-value">--</div>
-            </div>
-          </div>
-          <div id="sync-error" class="error-box" style="display: none"></div>
-          <button id="manual-sync-btn" class="btn btn-secondary btn-sm">Sync Now</button>
-        </section>
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+          <button class="tab-btn active" data-tab="status">Status</button>
+          <button class="tab-btn" data-tab="devices">Devices</button>
+          <button class="tab-btn" data-tab="debug">Debug</button>
+        </div>
 
-        <section>
-          <h2>Devices in Sync Chain</h2>
-          <div id="devices-list" class="devices-list"></div>
+        <!-- Status Tab -->
+        <div id="tab-status" class="tab-content active">
+          <section class="sync-overview">
+            <h2>Sync Status</h2>
+            <div class="status-grid">
+              <div class="status-item">
+                <div class="status-label">Connection</div>
+                <div id="connection-status" class="status-value">--</div>
+              </div>
+              <div class="status-item">
+                <div class="status-label">Local Passkeys</div>
+                <div id="local-count" class="status-value">--</div>
+              </div>
+              <div class="status-item">
+                <div class="status-label">Synced Passkeys</div>
+                <div id="synced-count" class="status-value">--</div>
+              </div>
+              <div class="status-item">
+                <div class="status-label">Pending Changes</div>
+                <div id="pending-changes" class="status-value">--</div>
+              </div>
+              <div class="status-item">
+                <div class="status-label">Last Sync</div>
+                <div id="last-sync" class="status-value">--</div>
+              </div>
+            </div>
+            <div id="sync-error" class="error-box" style="display: none"></div>
+            <button id="manual-sync-btn" class="btn btn-secondary btn-sm">Sync Now</button>
+          </section>
+        </div>
 
-          <button id="add-device-btn" class="btn btn-secondary btn-sm">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <polyline points="19 12 12 5 5 12"></polyline>
-            </svg>
-            Add Another Device
-          </button>
-        </section>
+        <!-- Devices Tab -->
+        <div id="tab-devices" class="tab-content">
+          <section>
+            <h2>Devices in Sync Chain</h2>
+            <div id="devices-list" class="devices-list"></div>
 
-        <section class="danger-zone">
-          <h2>Danger Zone</h2>
-          <div class="warning-box">
-            <strong>Leaving this sync chain</strong> will remove this device from the chain. Make
-            sure you have access to at least one other device before leaving.
-          </div>
+            <button id="add-device-btn" class="btn btn-secondary btn-sm">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <polyline points="19 12 12 5 5 12"></polyline>
+              </svg>
+              Add Another Device
+            </button>
+          </section>
 
-          <button id="leave-chain-btn" class="btn btn-danger btn-full">Leave Sync Chain</button>
-        </section>
+          <section class="danger-zone">
+            <h2>Danger Zone</h2>
+            <div class="warning-box">
+              <strong>Leaving this sync chain</strong> will remove this device from the chain. Make
+              sure you have access to at least one other device before leaving.
+            </div>
+
+            <button id="leave-chain-btn" class="btn btn-danger btn-full">Leave Sync Chain</button>
+          </section>
+        </div>
+
+        <!-- Debug Tab -->
+        <div id="tab-debug" class="tab-content">
+          <section>
+            <h2>Connection Debug Info</h2>
+            <div id="debug-info" class="debug-panel">
+              <pre>Loading...</pre>
+            </div>
+
+            <div class="debug-actions">
+              <button id="refresh-debug-btn" class="btn btn-secondary btn-sm">Refresh</button>
+              <button id="clear-logs-btn" class="btn btn-secondary btn-sm">Clear Logs</button>
+            </div>
+
+            <h2>Sync Logs</h2>
+            <div id="debug-logs" class="debug-logs">
+              <pre>Loading...</pre>
+            </div>
+          </section>
+        </div>
       </div>
 
       <footer>

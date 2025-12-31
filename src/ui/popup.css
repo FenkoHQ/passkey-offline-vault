@@ -936,6 +936,166 @@ html:has(.sync-settings) {
 .btn-full {
   width: 100%;
 }
+
+/* Tab Navigation */
+.tab-nav {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  border: 2px solid #000000;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: #ffffff;
+  color: #000000;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.1s;
+  border-right: 2px solid #000000;
+}
+
+.tab-btn:last-child {
+  border-right: none;
+}
+
+.tab-btn:hover {
+  background: #f5f5f5;
+}
+
+.tab-btn.active {
+  background: #000000;
+  color: #fcd34d;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Debug Panel Styles */
+.debug-panel {
+  background: #1a1a1a;
+  border: 2px solid #000000;
+  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.debug-panel pre {
+  margin: 0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #00ff00;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.debug-panel pre.error {
+  color: #ef4444;
+}
+
+.debug-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.debug-logs {
+  background: #1a1a1a;
+  border: 2px solid #000000;
+  border-radius: 4px;
+  padding: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.debug-logs pre {
+  margin: 0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 10px;
+  color: #888888;
+}
+
+.debug-logs pre.empty {
+  color: #666666;
+  text-align: center;
+  padding: 20px;
+}
+
+.log-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.log-entry {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 10px;
+  padding: 4px 6px;
+  border-radius: 2px;
+  background: #2a2a2a;
+}
+
+.log-entry.log-info {
+  color: #00ff00;
+}
+
+.log-entry.log-warn {
+  color: #fcd34d;
+  background: #3a3520;
+}
+
+.log-entry.log-error {
+  color: #ef4444;
+  background: #3a2020;
+}
+
+.log-entry.log-debug {
+  color: #888888;
+}
+
+.log-time {
+  color: #666666;
+  margin-right: 8px;
+}
+
+.log-category {
+  color: #00bfff;
+  margin-right: 8px;
+}
+
+.log-msg {
+  color: inherit;
+}
+
+.log-data {
+  color: #888888;
+  font-size: 9px;
+}
+
+.debug-logs::-webkit-scrollbar {
+  width: 6px;
+}
+
+.debug-logs::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+.debug-logs::-webkit-scrollbar-thumb {
+  background: #444444;
+  border-radius: 3px;
+}
+}
 }
 
 .modal-icon {
