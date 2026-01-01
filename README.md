@@ -12,6 +12,10 @@ A browser extension for secure passkey (WebAuthn) storage and management. Interc
 
 ## Installation
 
+### Install from Chrome Web Store
+
+[Download PassKey Vault](https://chromewebstore.google.com/detail/passkey-vault/lopekoolgoijpmaidblgfgelbkfkgmod)
+
 ### Prerequisites
 
 - Node.js 18+
@@ -51,6 +55,12 @@ npm run build:all
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click "Load Temporary Add-on..."
 3. Select `dist-firefox/manifest.json`
+
+## Screenshots
+
+![Screenshot 1](https://lh3.googleusercontent.com/dKfp1TeJFxcTcjWDzVWoJNJvl4eDkQS0gM_uOp446x73Ki9EN7HJ9UXkr_1VYr1kMWRdl-2S_Dfv32MygaP-FoMZ5A)
+
+![Screenshot 2](https://lh3.googleusercontent.com/vaVszzxShZYMg9Lv2OTtx6xetvJ4oWnj0fZsLh8XXBbWeV9CDMP6xZlh3EcRtPF31sydsSh5Wx17NrHeQGIFnXNJ9YY)
 
 ## Usage
 
