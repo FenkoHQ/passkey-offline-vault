@@ -12,14 +12,20 @@ All notable changes to Passkey Vault are documented here. The format follows
   Format (Apple, Google, 1Password, Bitwarden, Dashlane), Bitwarden, Proton
   Pass and Dashlane JSON, Google Authenticator export payloads, Aegis, 2FAS,
   andOTP, FreeOTP+, Raivo, Ente Auth, LastPass Authenticator, and the TOTP
-  column of Bitwarden, 1Password, Proton Pass, Dashlane, KeePassXC, LastPass
-  and Keeper exports.
+  column of Bitwarden, 1Password, Apple Passwords, Proton Pass, Dashlane,
+  KeePassXC, LastPass and Keeper exports.
 - Fillable CSV templates for MFA seeds and passkeys, downloadable from the
   import page and importable as-is.
 - Export in Credential Exchange Format, as an `otpauth://` URI list, or as CSV,
   alongside the existing Fenko backup.
 - Paste a Google Authenticator export QR (`otpauth-migration://`) or several
   `otpauth://` URIs at once into Add Code.
+
+### Changed
+
+- Options has an Import & Export section: the import page, both CSV templates,
+  and the export format picker now live there instead of in the Danger Zone,
+  which keeps only Clear All Passkeys and Factory Reset.
 
 ## [0.10.0] - 2026-09-07
 

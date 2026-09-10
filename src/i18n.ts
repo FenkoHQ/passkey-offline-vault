@@ -145,6 +145,7 @@ const en: TranslationMap = {
   navGeneral: 'General',
   navInterception: 'Interception',
   navSync: 'Sync',
+  navData: 'Import & Export',
   navSecurity: 'Security',
   navDeveloper: 'Developer',
 
@@ -233,6 +234,19 @@ const en: TranslationMap = {
   optionsRelayPlaceholder: 'wss://relay.example.com',
   optionsNoDevices: 'No devices.',
   optionsThisDevice: 'This Device',
+  optionsDataTitle: 'Import & Export',
+  optionsDataDesc:
+    'Move passkeys and MFA codes between Fenko Vault and other providers. Everything is read and written on this device.',
+  optionsImportCardTitle: 'Import from a file',
+  optionsImportCardDesc:
+    'Reads Credential Exchange Format (Apple, Google, 1Password, Bitwarden, Dashlane), Bitwarden, Proton Pass and Dashlane JSON, Google Authenticator export payloads, Aegis, 2FAS, andOTP, FreeOTP+, Raivo, Ente Auth, LastPass Authenticator, and the MFA column of the password-manager CSV exports. Shows a preview first and skips anything already in your vault.',
+  optionsOpenImportPage: 'Choose a file',
+  optionsTemplatesTitle: 'Templates',
+  optionsTemplatesDesc:
+    'Coming from an app with no export, or typing seeds in by hand? Fill in a template and import it. Rows starting with # are comments explaining each column.',
+  optionsExportCardTitle: 'Export',
+  optionsExportCardDesc:
+    'Your own backup, or a format another provider can read. These files hold passkey private keys and MFA seeds in plaintext — delete them once the other app has imported them. For a backup you intend to keep, use the password-protected export in the popup.',
   optionsSecurityTitle: 'Security',
   optionsSecurityDesc: 'Encryption and access control settings.',
   optionsMasterPassword: 'Master PIN',
@@ -298,7 +312,6 @@ const en: TranslationMap = {
   optionsNoWebAuthnLogs: 'No WebAuthn events logged yet.',
   optionsImportConfirm: 'This will overwrite ALL existing data. Are you sure?',
   optionsImportSuccess: 'Data imported. Reload the extension to apply changes.',
-  optionsImportNothingNew: 'Nothing new in that file — your vault already has all of it.',
   optionsExportPlaintextWarning:
     'This file holds your passkey private keys and MFA seeds in plaintext. Delete it once the other app has imported it. Continue?',
   optionsInvalidJson: 'Invalid JSON file.',
