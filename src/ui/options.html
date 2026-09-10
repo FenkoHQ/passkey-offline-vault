@@ -755,9 +755,11 @@
                 <div>
                   <span class="danger-title" data-i18n="optionsExportAllData">Export All Data</span>
                   <span class="danger-desc" data-i18n="optionsExportAllDataDesc"
-                    >Download everything as JSON (passkeys, settings, sync config).</span
+                    >Download passkeys and MFA seeds, in Fenko's own format or one another
+                    provider can read. Plaintext — delete the file once it is imported.</span
                   >
                 </div>
+                <select id="export-format"></select>
                 <button id="export-all-btn" class="btn btn-secondary btn-sm">
                   <span data-i18n="commonExport">Export</span>
                 </button>
@@ -766,13 +768,13 @@
                 <div>
                   <span class="danger-title" data-i18n="optionsImportData">Import Data</span>
                   <span class="danger-desc" data-i18n="optionsImportDataDesc"
-                    >Restore from a previously exported JSON file.</span
+                    >Restore a Fenko backup, or import from another provider (JSON, CXF, CSV).</span
                   >
                 </div>
                 <button id="import-all-btn" class="btn btn-secondary btn-sm">
                   <span data-i18n="commonImport">Import</span>
                 </button>
-                <input type="file" id="import-file-input" accept=".json" style="display: none" />
+                <input type="file" id="import-file-input" accept=".json,.csv,.txt,.cxf,.2fas,.uri" style="display: none" />
               </div>
               <div class="danger-row">
                 <div>

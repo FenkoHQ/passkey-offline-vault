@@ -5,6 +5,7 @@
  */
 
 import jsQR from 'jsqr';
+import { materialize, parseImport } from '../porting';
 import { formatCount, initAndLocalize, t } from '../i18n';
 import { initTheme } from '../theme';
 
@@ -1266,6 +1267,40 @@ import { initTheme } from '../theme';
     }
   }
 
+  /**
+   * Add whatever was pasted or scanned: a single otpauth:// URI, a Google
+   * Authenticator export payload (otpauth-migration://, many seeds in one QR),
+   * or a list of URIs. Duplicates already in the vault are dropped.
+   */
+  async function addOtpFromText(text: string): Promise<{ success: boolean; error?: string }> {
+    const isSingleUri = /^otpauth:\/\//i.test(text) && !/\s/.test(text);
+    if (isSingleUri) {
+      return chrome.runtime.sendMessage({
+        type: 'ADD_TOTP_ENTRY',
+        payload: { otpauthUri: text },
+      });
+    }
+
+    try {
+      const existing = await chrome.runtime.sendMessage({ type: 'LIST_TOTP_ENTRIES' });
+      const ready = await materialize(parseImport('paste.txt', text), {
+        passkeys: [],
+        totpEntries: existing.entries || [],
+      });
+
+      if (ready.totpEntries.length === 0) {
+        return { success: false, error: t('popupTotpAllExist') };
+      }
+
+      return chrome.runtime.sendMessage({
+        type: 'IMPORT_VAULT',
+        payload: { passkeys: [], totpEntries: ready.totpEntries },
+      });
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
   function showAddTotpDialog(): void {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -1361,10 +1396,7 @@ import { initTheme } from '../theme';
         return;
       }
       saveBtn.disabled = true;
-      const response = await chrome.runtime.sendMessage({
-        type: 'ADD_TOTP_ENTRY',
-        payload: { otpauthUri: uri },
-      });
+      const response = await addOtpFromText(uri);
       if (response.success) {
         codeCache.clear();
         showNotification(t('popupTotpAdded'));

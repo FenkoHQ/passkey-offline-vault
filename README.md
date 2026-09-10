@@ -59,6 +59,7 @@ Intercepts WebAuthn API calls and stores passkeys locally, bypassing the browser
 - **Unified vault** — passkeys and 2FA codes share one searchable list with per-type filters; each entry expands to show its details
 - **Vault lock** — optional 4–12 digit master PIN encrypts the vault at rest and locks the popup; set, change, or remove it any time
 - **Backup & import** — export all passkeys (including private keys) and TOTP entries as a JSON file, import on another device
+- **Move in from anywhere** — import passkeys and MFA seeds from CXF, Bitwarden, Proton Pass, Dashlane, 1Password, KeePassXC, LastPass, Keeper, Google Authenticator, Aegis, 2FAS, andOTP, FreeOTP+, Raivo and Ente Auth; export back out as CXF, `otpauth://` or CSV ([details](docs/porting/README.md))
 - **Cross-device sync** — optional Nostr-based sync chain using a BIP-39 seed phrase; passkeys and 2FA codes sync end-to-end encrypted
 - **Emergency access** — standalone recovery page for vault management without the extension popup
 - **Chrome, Firefox & Android** — one codebase; browser extension plus a native Android passkey provider

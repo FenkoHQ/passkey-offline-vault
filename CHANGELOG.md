@@ -6,6 +6,21 @@ All notable changes to Passkey Vault are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Import passkeys and MFA seeds from other providers: Credential Exchange
+  Format (Apple, Google, 1Password, Bitwarden, Dashlane), Bitwarden, Proton
+  Pass and Dashlane JSON, Google Authenticator export payloads, Aegis, 2FAS,
+  andOTP, FreeOTP+, Raivo, Ente Auth, LastPass Authenticator, and the TOTP
+  column of Bitwarden, 1Password, Proton Pass, Dashlane, KeePassXC, LastPass
+  and Keeper exports.
+- Fillable CSV templates for MFA seeds and passkeys, downloadable from the
+  import page and importable as-is.
+- Export in Credential Exchange Format, as an `otpauth://` URI list, or as CSV,
+  alongside the existing Fenko backup.
+- Paste a Google Authenticator export QR (`otpauth-migration://`) or several
+  `otpauth://` URIs at once into Add Code.
+
 ## [0.10.0] - 2026-09-07
 
 ### Sync upgrade

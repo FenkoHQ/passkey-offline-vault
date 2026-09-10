@@ -14,6 +14,13 @@ import {
   type WebAuthnFlagSettings,
 } from '../background/webauthn-settings';
 import { FLAG_UP, FLAG_UV, FLAG_BE, FLAG_BS, FLAG_AT } from '../background/cbor';
+import {
+  EXPORT_FORMATS,
+  buildExport,
+  materialize,
+  parseImport,
+  type ExportFormat,
+} from '../porting';
 
 const DEFAULT_RELAYS = [
   'wss://vaultsync.fenko.nz',
@@ -59,6 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadAdvancedSettings();
   loadDeveloperSettings();
   loadExtensionInfo();
+  fillExportFormats();
 });
 
 // ==================== GENERAL ====================
@@ -802,19 +810,40 @@ function loadExtensionInfo(): void {
 
 // ==================== DANGER ZONE ====================
 
+function fillExportFormats(): void {
+  const select = document.getElementById('export-format') as HTMLSelectElement | null;
+  if (!select) return;
+
+  for (const format of EXPORT_FORMATS) {
+    const option = document.createElement('option');
+    option.value = format.id;
+    option.textContent = format.label;
+    option.title = format.hint;
+    select.appendChild(option);
+  }
+}
+
 async function exportAllData(): Promise<void> {
+  const select = document.getElementById('export-format') as HTMLSelectElement | null;
+  const format = (select?.value || 'fenko-json') as ExportFormat;
+
   const response = await sendMessage('EXPORT_VAULT');
   if (!response.success) {
     alert(String(response.error || 'Unlock the vault before exporting it.'));
     return;
   }
-  const json = JSON.stringify(response, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
 
+  if (!confirm(t('optionsExportPlaintextWarning'))) return;
+
+  const file = buildExport(format, {
+    passkeys: (response.passkeys || []) as never,
+    totpEntries: (response.totpEntries || []) as never,
+  });
+
+  const url = URL.createObjectURL(new Blob([file.content], { type: file.mimeType }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `passkey-vault-export-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = file.fileName;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -831,29 +860,33 @@ async function importAllData(e: Event): Promise<void> {
 
   const text = await file.text();
   try {
-    const data = JSON.parse(text);
-    // Validate BEFORE wiping anything — a parseable but non-object file (or a
-    // failed set) must not leave the vault cleared with nothing restored.
-    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-      alert(t('optionsInvalidJson'));
+    // Any supported provider export, not just our own backups. Parsing runs
+    // before anything is written, so a bad file leaves the vault untouched.
+    const parsed = parseImport(file.name, text);
+    const [passkeyResult, totpResult] = await Promise.all([
+      sendMessage('LIST_PASSKEYS'),
+      sendMessage('LIST_TOTP_ENTRIES'),
+    ]);
+
+    const ready = await materialize(parsed, {
+      passkeys: (passkeyResult.passkeys || []) as never,
+      totpEntries: (totpResult.entries || []) as never,
+    });
+
+    if (ready.passkeys.length + ready.totpEntries.length === 0) {
+      alert(t('optionsImportNothingNew'));
       input.value = '';
       return;
     }
-    if (!Array.isArray(data.passkeys)) {
-      alert('Use the dedicated Vault Import page for this backup format.');
-      input.value = '';
-      return;
-    }
+
     const result = await sendMessage('IMPORT_VAULT', {
-      passkeys: data.passkeys as unknown as Record<string, unknown>,
-      totpEntries: Array.isArray(data.totpEntries)
-        ? (data.totpEntries as unknown as Record<string, unknown>)
-        : [],
+      passkeys: ready.passkeys as unknown as Record<string, unknown>,
+      totpEntries: ready.totpEntries as unknown as Record<string, unknown>,
     });
     if (!result.success) throw new Error(String(result.error || 'Import failed'));
     alert(t('optionsImportSuccess'));
-  } catch {
-    alert(t('optionsInvalidJson'));
+  } catch (error) {
+    alert(String((error as Error).message || t('optionsInvalidJson')));
   }
   input.value = '';
 }

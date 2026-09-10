@@ -1,42 +1,35 @@
 /**
  * Import Page for Fenko Vault
  *
- * Handles importing passkeys from backup files
+ * Takes a file from any of the supported providers — encrypted Fenko backups,
+ * CXF, password-manager exports, authenticator-app backups, or a filled-in
+ * CSV template — and turns it into vault records.
  */
 
 import { initAndLocalize, t } from '../i18n';
 import { initTheme } from '../theme';
+import {
+  acceptedExtensions,
+  materialize,
+  parseImport,
+  passkeyCsvTemplate,
+  totpCsvTemplate,
+  type MaterializedImport,
+} from '../porting';
 
 (function () {
   'use strict';
 
-  interface ImportPasskey {
+  const TEMPLATE_MIME = 'text/csv';
+
+  interface ExistingPasskey {
     id: string;
+    credentialId?: string;
     rpId?: string;
-    privateKey?: string;
-    user?: {
-      name?: string;
-      displayName?: string;
-      [key: string]: unknown;
-    };
-    [key: string]: unknown;
-  }
-
-  interface ImportTotpEntry {
-    id: string;
-    [key: string]: unknown;
-  }
-
-  interface PlaintextBackup {
-    passkeys?: ImportPasskey[];
-    totpEntries?: ImportTotpEntry[];
-    [key: string]: unknown;
   }
 
   // State
-  let parsedData: PlaintextBackup | null = null;
-  let newPasskeys: ImportPasskey[] = [];
-  let existingIds: Set<string> = new Set();
+  let pending: MaterializedImport | null = null;
 
   // DOM elements
   const dropZone = document.getElementById('drop-zone') as HTMLElement;
@@ -45,32 +38,48 @@ import { initTheme } from '../theme';
   const statusEl = document.getElementById('status') as HTMLElement;
   const previewEl = document.getElementById('preview') as HTMLElement;
   const previewListEl = document.getElementById('preview-list') as HTMLElement;
+  const previewTitleEl = document.getElementById('preview-title') as HTMLElement;
   const actionsEl = document.getElementById('actions') as HTMLElement;
   const cancelBtn = document.getElementById('cancel-btn') as HTMLButtonElement;
   const importBtn = document.getElementById('import-btn') as HTMLButtonElement;
   const closeLink = document.getElementById('close-link') as HTMLAnchorElement;
+  const totpTemplateBtn = document.getElementById('totp-template-btn') as HTMLButtonElement;
+  const passkeyTemplateBtn = document.getElementById('passkey-template-btn') as HTMLButtonElement;
 
   // Initialize
   void Promise.all([initAndLocalize(), initTheme()]);
+  fileInput.accept = acceptedExtensions().join(',');
   setupEventListeners();
 
   function setupEventListeners(): void {
-    // File input change
     fileInput.addEventListener('change', handleFileSelect);
 
-    // Drag and drop
     dropZone.addEventListener('dragover', handleDragOver);
     dropZone.addEventListener('dragleave', handleDragLeave);
     dropZone.addEventListener('drop', handleDrop);
 
-    // Buttons
     cancelBtn.addEventListener('click', resetState);
     importBtn.addEventListener('click', performImport);
     chooseFileBtn.addEventListener('click', () => fileInput.click());
+    totpTemplateBtn?.addEventListener('click', () =>
+      downloadTemplate('fenko-mfa-template.csv', totpCsvTemplate())
+    );
+    passkeyTemplateBtn?.addEventListener('click', () =>
+      downloadTemplate('fenko-passkey-template.csv', passkeyCsvTemplate())
+    );
     closeLink.addEventListener('click', (e) => {
       e.preventDefault();
       window.close();
     });
+  }
+
+  function downloadTemplate(fileName: string, content: string): void {
+    const url = URL.createObjectURL(new Blob([content], { type: TEMPLATE_MIME }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   function handleDragOver(e: DragEvent): void {
@@ -92,7 +101,7 @@ import { initTheme } from '../theme';
 
     const files = e.dataTransfer?.files;
     if (files && files.length > 0) {
-      processFile(files[0]);
+      void processFile(files[0]);
     }
   }
 
@@ -100,37 +109,37 @@ import { initTheme } from '../theme';
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (file) {
-      processFile(file);
+      void processFile(file);
     }
   }
 
   async function processFile(file: File): Promise<void> {
     resetState();
 
-    if (!file.name.endsWith('.json') && file.type !== 'application/json') {
-      showStatus(t('importSelectJson'), 'error');
-      return;
-    }
-
     try {
       const text = await file.text();
-      const fileData = JSON.parse(text);
+      const encrypted = readEncryptedBackup(text);
 
-      // Check if this is an encrypted backup
-      if (fileData.encrypted === true && fileData.data && fileData.iv && fileData.salt) {
-        await processEncryptedBackup(fileData);
+      if (encrypted) {
+        await processEncryptedBackup(encrypted);
         return;
       }
 
-      // Unencrypted backup (legacy support)
-      await processPlaintextBackup(fileData);
+      await processContent(file.name, text);
     } catch (error) {
       console.error('Error processing file:', error);
-      if (error instanceof SyntaxError) {
-        showStatus(t('importInvalidJson'), 'error');
-      } else {
-        showStatus(t('importFailedProcess', { error: (error as Error).message }), 'error');
-      }
+      showStatus(t('importFailedProcess', { error: (error as Error).message }), 'error');
+    }
+  }
+
+  /** Our own password-protected backup, which must be decrypted first. */
+  function readEncryptedBackup(text: string): Record<string, string> | null {
+    try {
+      const data = JSON.parse(text);
+      const isEncrypted = data?.encrypted === true && data.data && data.iv && data.salt;
+      return isEncrypted ? (data as Record<string, string>) : null;
+    } catch {
+      return null;
     }
   }
 
@@ -158,12 +167,107 @@ import { initTheme } from '../theme';
       return;
     }
 
+    await processContent('backup.json', response.data);
+  }
+
+  /** Parse, de-duplicate against the vault, then show what would be added. */
+  async function processContent(fileName: string, text: string): Promise<void> {
+    let parsed;
     try {
-      const decrypted = JSON.parse(response.data);
-      await processPlaintextBackup(decrypted);
-    } catch {
-      showStatus(t('importInvalidDecrypted'), 'error');
+      parsed = parseImport(fileName, text);
+    } catch (error) {
+      showStatus((error as Error).message, 'error');
+      return;
     }
+
+    const [passkeyResult, totpResult] = await Promise.all([
+      chrome.runtime.sendMessage({ type: 'LIST_PASSKEYS' }),
+      chrome.runtime.sendMessage({ type: 'LIST_TOTP_ENTRIES' }),
+    ]);
+    if (!passkeyResult.success) {
+      throw new Error(passkeyResult.error || 'Failed to load vault');
+    }
+
+    pending = await materialize(parsed, {
+      passkeys: (passkeyResult.passkeys || []) as ExistingPasskey[],
+      totpEntries: totpResult.success ? totpResult.entries || [] : [],
+    });
+
+    showPreview(pending);
+  }
+
+  function showPreview(result: MaterializedImport): void {
+    previewListEl.innerHTML = '';
+    previewTitleEl.textContent = t('importDetectedFormat', { format: result.formatLabel });
+
+    for (const passkey of result.passkeys) {
+      appendPreviewItem(passkey.rpId, passkey.user.name || passkey.user.displayName, 'passkey');
+    }
+    for (const entry of result.totpEntries) {
+      appendPreviewItem(entry.issuer || t('commonUnknownSite'), entry.account, 'mfa');
+    }
+
+    const duplicates = result.duplicatePasskeys + result.duplicateTotp;
+    for (let i = 0; i < duplicates; i++) {
+      appendPreviewItem(t('importAlreadyExists'), '', 'duplicate');
+    }
+
+    previewEl.classList.add('visible');
+
+    const total = result.passkeys.length + result.totpEntries.length;
+    if (total === 0) {
+      showStatus(t('importNothingNew'), 'info');
+      reportWarnings(result);
+      return;
+    }
+
+    let message = t('importFoundEntries', {
+      passkeys: result.passkeys.length,
+      totp: result.totpEntries.length,
+    });
+    if (duplicates > 0) {
+      message += t('importDuplicatesSkipped', {
+        count: duplicates,
+        plural: duplicates !== 1 ? 's' : '',
+      });
+    }
+    showStatus(message, 'info');
+    reportWarnings(result);
+
+    actionsEl.classList.remove('hidden');
+  }
+
+  function reportWarnings(result: MaterializedImport): void {
+    if (result.warnings.length === 0) return;
+    const note = document.createElement('div');
+    note.className = 'preview-warnings';
+    note.textContent = `${t('importSkippedItems', { count: result.warnings.length })} ${result.warnings.join(' · ')}`;
+    previewListEl.appendChild(note);
+  }
+
+  function appendPreviewItem(
+    title: string,
+    subtitle: string,
+    kind: 'passkey' | 'mfa' | 'duplicate'
+  ): void {
+    const labels = {
+      passkey: t('importKindPasskey'),
+      mfa: t('importKindMfa'),
+      duplicate: t('importAlreadyExists'),
+    };
+
+    const item = document.createElement('div');
+    item.className = 'preview-item';
+    item.innerHTML = `
+      <div>
+        <div class="preview-item-site">${importEscapeHtml(title || t('commonUnknownSite'))}</div>
+        <div class="preview-item-user">${importEscapeHtml(subtitle || t('commonUnknownUser'))}</div>
+      </div>
+      <span class="preview-item-status ${kind === 'duplicate' ? 'duplicate' : 'new'}">
+        ${labels[kind]}
+      </span>
+    `;
+    previewListEl.appendChild(item);
   }
 
   function showImportPasswordPrompt(): Promise<string | null> {
@@ -215,113 +319,31 @@ import { initTheme } from '../theme';
     });
   }
 
-  async function processPlaintextBackup(data: Record<string, unknown>): Promise<void> {
-    parsedData = data;
-
-    if (!parsedData.passkeys || !Array.isArray(parsedData.passkeys)) {
-      showStatus(t('importInvalidFormat'), 'error');
-      return;
-    }
-
-    const hasPrivateKeys = parsedData.passkeys.some((p) => p.privateKey);
-
-    if (!hasPrivateKeys) {
-      showStatus(t('importNoPrivateKeys'), 'error');
-      return;
-    }
-
-    const validPasskeys = parsedData.passkeys.filter((p) => {
-      return p.id && p.rpId && p.privateKey;
-    });
-
-    if (validPasskeys.length === 0) {
-      showStatus(t('importNoValid'), 'error');
-      return;
-    }
-
-    const result = await chrome.runtime.sendMessage({ type: 'LIST_PASSKEYS' });
-    if (!result.success) throw new Error(result.error || 'Failed to load vault');
-    const existingPasskeys = (result.passkeys || []) as ImportPasskey[];
-    existingIds = new Set(existingPasskeys.map((p) => p.id));
-
-    newPasskeys = validPasskeys.filter((p) => !existingIds.has(p.id));
-    const duplicates = validPasskeys.filter((p) => existingIds.has(p.id));
-
-    showPreview(validPasskeys, duplicates);
-
-    if (newPasskeys.length === 0) {
-      showStatus(t('importAllExist'), 'info');
-      return;
-    }
-
-    let message = t('importFoundNew', {
-      count: newPasskeys.length,
-      plural: newPasskeys.length !== 1 ? 's' : '',
-    });
-    if (duplicates.length > 0) {
-      message += t('importDuplicatesSkipped', {
-        count: duplicates.length,
-        plural: duplicates.length !== 1 ? 's' : '',
-      });
-    }
-    showStatus(message, 'info');
-
-    actionsEl.classList.remove('hidden');
-  }
-
-  function showPreview(allPasskeys: ImportPasskey[], duplicates: ImportPasskey[]): void {
-    previewListEl.innerHTML = '';
-
-    allPasskeys.forEach((pk) => {
-      const isDuplicate = duplicates.some((d) => d.id === pk.id);
-      const item = document.createElement('div');
-      item.className = 'preview-item';
-      item.innerHTML = `
-        <div>
-          <div class="preview-item-site">${importEscapeHtml(pk.rpId || t('commonUnknownSite'))}</div>
-          <div class="preview-item-user">${importEscapeHtml(pk.user?.name || pk.user?.displayName || t('commonUnknownUser'))}</div>
-        </div>
-        <span class="preview-item-status ${isDuplicate ? 'duplicate' : 'new'}">
-          ${isDuplicate ? t('importAlreadyExists') : t('importNew')}
-        </span>
-      `;
-      previewListEl.appendChild(item);
-    });
-
-    previewEl.classList.add('visible');
-  }
-
   async function performImport(): Promise<void> {
-    if (newPasskeys.length === 0) {
+    if (!pending || pending.passkeys.length + pending.totpEntries.length === 0) {
       showStatus(t('importNoNew'), 'error');
       return;
     }
 
     try {
-      const backupTotp = Array.isArray(parsedData?.totpEntries) ? parsedData!.totpEntries : [];
       const response = await chrome.runtime.sendMessage({
         type: 'IMPORT_VAULT',
-        payload: { passkeys: newPasskeys, totpEntries: backupTotp },
+        payload: { passkeys: pending.passkeys, totpEntries: pending.totpEntries },
       });
       if (!response.success) throw new Error(response.error || 'Import failed');
-      const importedTotp = Number(response.totpEntries || 0);
 
-      // Show success
       showStatus(
-        t('importSuccess', {
-          count: newPasskeys.length,
-          plural: newPasskeys.length !== 1 ? 's' : '',
-        }) + (importedTotp > 0 ? ` (+${importedTotp} TOTP)` : ''),
+        t('importSucceeded', {
+          passkeys: Number(response.passkeys || 0),
+          totp: Number(response.totpEntries || 0),
+        }),
         'success'
       );
 
-      // Hide action buttons
       actionsEl.classList.add('hidden');
-
-      // Update close link text
       closeLink.textContent = t('importCloseReturn');
     } catch (error) {
-      console.error('Error importing passkeys:', error);
+      console.error('Error importing:', error);
       showStatus(t('importFailed', { error: (error as Error).message }), 'error');
     }
   }
@@ -332,9 +354,7 @@ import { initTheme } from '../theme';
   }
 
   function resetState(): void {
-    parsedData = null;
-    newPasskeys = [];
-    existingIds = new Set();
+    pending = null;
     statusEl.className = 'status';
     statusEl.textContent = '';
     previewEl.classList.remove('visible');
