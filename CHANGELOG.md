@@ -6,6 +6,20 @@ All notable changes to Passkey Vault are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-10
+
+### Moving in from another provider
+
+Passkeys and MFA seeds can now come from the apps you are leaving, instead of
+being retyped by hand. Import reads the Credential Exchange Format the FIDO
+Alliance defined for exactly this, the vendor JSON of the major password
+managers, the backups of the authenticator apps, and a CSV template for
+anything else. Export writes the same formats back out.
+
+Everything is parsed on the device. Nothing is uploaded, and encrypted exports
+are refused with the setting to change rather than a request for another
+provider's password.
+
 ### Added
 
 - Import passkeys and MFA seeds from other providers: Credential Exchange

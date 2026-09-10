@@ -1,3 +1,1 @@
-Fix cross-device sync conflicts, deletions, restores, and native vault persistence. Large vaults sync in smaller encrypted events, with bounded retries.
-
-Update every device in your sync chain to 0.10.0 together. Local credentials and recovery phrases are preserved. Old relay history is not imported; updated devices republish their local vaults.
+Version bump to stay in step with the browser extension, which gains import and export for other providers' passkey and MFA formats. The Android provider itself is unchanged in this release.
