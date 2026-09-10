@@ -937,6 +937,14 @@ body::before {
 </body></html>`);
     await p.waitForTimeout(300);
     const file = path.join(CWS_DIR, 'promo-small.jpg');
+    // Preserve the banner artwork when regenerating store assets.
+    const banner = path.join(CWS_DIR, 'source', 'fenko-vault-banner.png');
+    if (fs.existsSync(banner)) {
+      const data = fs.readFileSync(banner).toString('base64');
+      await p.setContent(`<body style="margin:0"><img style="display:block;width:440px;height:280px"
+        src="data:image/png;base64,${data}" alt="Fenko Vault"></body>`);
+      await p.locator('img').evaluate((img) => img.decode());
+    }
     await p.screenshot({
       path: file,
       type: 'jpeg',
@@ -1025,6 +1033,14 @@ body::before {
 
     await p.waitForTimeout(300);
     const file = path.join(CWS_DIR, 'promo-marquee.jpg');
+    // Preserve the marquee artwork when regenerating store assets.
+    const banner = path.join(CWS_DIR, 'source', 'fenko-vault-marquee.png');
+    if (fs.existsSync(banner)) {
+      const data = fs.readFileSync(banner).toString('base64');
+      await p.setContent(`<body style="margin:0"><img style="display:block;width:1400px;height:560px"
+        src="data:image/png;base64,${data}" alt="Fenko Vault"></body>`);
+      await p.locator('img').evaluate((img) => img.decode());
+    }
     await p.screenshot({
       path: file,
       type: 'jpeg',
@@ -1050,6 +1066,12 @@ async function main() {
   if (MODE === 'all' || MODE === 'screenshots') await captureScreenshots();
   if (MODE === 'all' || MODE === 'readme') await captureReadme();
   if (MODE === 'all' || MODE === 'video') await captureVideo();
+  if (MODE === 'promo-video') {
+    await require('./capture-promo-video')({
+      launchWithExtension, getExtensionId, extPage, injectPasskeys,
+      injectTotp, setTheme, waitReady, MOCK_PASSKEYS, MOCK_TOTP, ROOT, VIDEO_DIR,
+    });
+  }
   if (MODE === 'all' || MODE === 'cws') await captureCWS();
   if (MODE === 'all' || MODE === 'promo') await capturePromoTiles();
 
