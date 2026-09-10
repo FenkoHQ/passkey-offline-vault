@@ -371,6 +371,47 @@
         text-decoration: underline;
       }
 
+      .preview-warnings {
+        margin-top: 8px;
+        padding: 10px 12px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--warning);
+        background: var(--warning-soft);
+        border: 1px solid var(--warning);
+        border-radius: var(--radius-md);
+      }
+
+      .sources {
+        margin-top: 18px;
+        padding: 16px;
+        background: var(--bg-elev);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-lg);
+      }
+
+      .sources h4 {
+        font-size: 12.5px;
+        font-weight: 500;
+        margin: 0 0 8px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .sources p {
+        margin: 0 0 10px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--text-muted);
+      }
+
+      .sources-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
       .hidden {
         display: none !important;
       }
@@ -405,7 +446,7 @@
           </div>
           <h3 data-i18n="importDropHere">Drop your backup file here</h3>
           <p data-i18n="importOrBrowse">or click to browse</p>
-          <input type="file" id="file-input" accept=".json,application/json" />
+          <input type="file" id="file-input" accept=".json,.csv,.txt,.cxf,.2fas,.uri" />
           <button class="btn btn-primary" id="choose-file-btn" data-i18n="importChooseFile">
             Choose File
           </button>
@@ -413,8 +454,36 @@
 
         <div class="status" id="status"></div>
 
+        <div class="sources">
+          <h4 data-i18n="importSourcesTitle">Where can this come from?</h4>
+          <p data-i18n="importSourcesPasskeys">
+            Passkeys: Credential Exchange Format (Apple, Google, 1Password, Bitwarden, Dashlane),
+            Bitwarden JSON, Proton Pass JSON, Dashlane JSON, and Fenko backups.
+          </p>
+          <p data-i18n="importSourcesMfa">
+            MFA: Google Authenticator export QR, Aegis, 2FAS, andOTP, FreeOTP+, Raivo, Ente Auth,
+            LastPass Authenticator, plus the TOTP column of Bitwarden, 1Password, Proton Pass,
+            Dashlane, KeePassXC, LastPass and Keeper exports.
+          </p>
+          <p data-i18n="importSourcesTemplate">
+            Nothing fits? Fill in a template and import that.
+          </p>
+          <div class="sources-actions">
+            <button class="btn btn-secondary" id="totp-template-btn" data-i18n="importTemplateMfa">
+              MFA template (CSV)
+            </button>
+            <button
+              class="btn btn-secondary"
+              id="passkey-template-btn"
+              data-i18n="importTemplatePasskey"
+            >
+              Passkey template (CSV)
+            </button>
+          </div>
+        </div>
+
         <div class="preview" id="preview">
-          <h4 data-i18n="importPreviewTitle">Passkeys to import:</h4>
+          <h4 id="preview-title" data-i18n="importPreviewTitle">Passkeys to import:</h4>
           <div class="preview-list" id="preview-list"></div>
         </div>
 

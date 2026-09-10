@@ -1124,6 +1124,12 @@ textarea:focus {
   padding-bottom: 0;
 }
 
+/* Export format picker sits beside the Export button, never squeezing it. */
+#export-format {
+  flex-shrink: 0;
+  max-width: 260px;
+}
+
 .danger-row:first-child {
   padding-top: 0;
 }

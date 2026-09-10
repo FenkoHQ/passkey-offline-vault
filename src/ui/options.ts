@@ -14,6 +14,13 @@ import {
   type WebAuthnFlagSettings,
 } from '../background/webauthn-settings';
 import { FLAG_UP, FLAG_UV, FLAG_BE, FLAG_BS, FLAG_AT } from '../background/cbor';
+import {
+  EXPORT_FORMATS,
+  buildExport,
+  passkeyCsvTemplate,
+  totpCsvTemplate,
+  type ExportFormat,
+} from '../porting';
 
 const DEFAULT_RELAYS = [
   'wss://vaultsync.fenko.nz',
@@ -59,6 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadAdvancedSettings();
   loadDeveloperSettings();
   loadExtensionInfo();
+  fillExportFormats();
 });
 
 // ==================== GENERAL ====================
@@ -694,12 +702,21 @@ async function loadDeveloperSettings(): Promise<void> {
     loadWebAuthnLog();
   });
 
-  // Danger zone
+  // Import & export
   document.getElementById('export-all-btn')!.addEventListener('click', exportAllData);
-  document.getElementById('import-all-btn')!.addEventListener('click', () => {
-    document.getElementById('import-file-input')!.click();
+  document.getElementById('open-import-page-btn')!.addEventListener('click', () => {
+    window.open(chrome.runtime.getURL('import.html'));
   });
-  document.getElementById('import-file-input')!.addEventListener('change', importAllData);
+  document
+    .getElementById('options-totp-template-btn')!
+    .addEventListener('click', () => downloadTemplate('fenko-mfa-template.csv', totpCsvTemplate()));
+  document
+    .getElementById('options-passkey-template-btn')!
+    .addEventListener('click', () =>
+      downloadTemplate('fenko-passkey-template.csv', passkeyCsvTemplate())
+    );
+
+  // Danger zone
   document.getElementById('clear-passkeys-btn')!.addEventListener('click', clearPasskeys);
   document.getElementById('factory-reset-btn')!.addEventListener('click', factoryReset);
 }
@@ -802,60 +819,60 @@ function loadExtensionInfo(): void {
 
 // ==================== DANGER ZONE ====================
 
+function fillExportFormats(): void {
+  const select = document.getElementById('export-format') as HTMLSelectElement | null;
+  const hint = document.getElementById('export-format-hint');
+  if (!select) return;
+
+  for (const format of EXPORT_FORMATS) {
+    const option = document.createElement('option');
+    option.value = format.id;
+    option.textContent = format.label;
+    option.title = format.hint;
+    select.appendChild(option);
+  }
+
+  const showHint = () => {
+    const chosen = EXPORT_FORMATS.find((format) => format.id === select.value);
+    if (hint) hint.textContent = chosen?.hint || '';
+  };
+
+  select.addEventListener('change', showHint);
+  showHint();
+}
+
+function downloadTemplate(fileName: string, content: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: 'text/csv' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 async function exportAllData(): Promise<void> {
+  const select = document.getElementById('export-format') as HTMLSelectElement | null;
+  const format = (select?.value || 'fenko-json') as ExportFormat;
+
   const response = await sendMessage('EXPORT_VAULT');
   if (!response.success) {
     alert(String(response.error || 'Unlock the vault before exporting it.'));
     return;
   }
-  const json = JSON.stringify(response, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
 
+  if (!confirm(t('optionsExportPlaintextWarning'))) return;
+
+  const file = buildExport(format, {
+    passkeys: (response.passkeys || []) as never,
+    totpEntries: (response.totpEntries || []) as never,
+  });
+
+  const url = URL.createObjectURL(new Blob([file.content], { type: file.mimeType }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `passkey-vault-export-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = file.fileName;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-async function importAllData(e: Event): Promise<void> {
-  const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file) return;
-
-  if (!confirm(t('optionsImportConfirm'))) {
-    input.value = '';
-    return;
-  }
-
-  const text = await file.text();
-  try {
-    const data = JSON.parse(text);
-    // Validate BEFORE wiping anything — a parseable but non-object file (or a
-    // failed set) must not leave the vault cleared with nothing restored.
-    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-      alert(t('optionsInvalidJson'));
-      input.value = '';
-      return;
-    }
-    if (!Array.isArray(data.passkeys)) {
-      alert('Use the dedicated Vault Import page for this backup format.');
-      input.value = '';
-      return;
-    }
-    const result = await sendMessage('IMPORT_VAULT', {
-      passkeys: data.passkeys as unknown as Record<string, unknown>,
-      totpEntries: Array.isArray(data.totpEntries)
-        ? (data.totpEntries as unknown as Record<string, unknown>)
-        : [],
-    });
-    if (!result.success) throw new Error(String(result.error || 'Import failed'));
-    alert(t('optionsImportSuccess'));
-  } catch {
-    alert(t('optionsInvalidJson'));
-  }
-  input.value = '';
 }
 
 async function clearPasskeys(): Promise<void> {

@@ -14,6 +14,7 @@
 - [x] Password-protect export files (AES-256-GCM, password required on import)
 - [x] TOTP / HOTP store (RFC 6238 / 4226) with otpauth:// import, live codes, clipboard copy
 - [x] TOTP entries included in encrypted backup and Nostr sync bundle
+- [x] Import/export interop with other providers (CXF, password managers, authenticator apps) plus fillable CSV templates
 
 ## Phase 2: Complete
 

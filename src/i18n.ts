@@ -116,10 +116,11 @@ const en: TranslationMap = {
   popupAddTotp: 'Add Code',
   popupAddTotpTitle: 'Add 2FA Code',
   popupAddTotpHelp:
-    'Paste the otpauth:// URI from your service. Most QR codes can be copied as text from your authenticator app.',
+    'Paste the otpauth:// URI from your service, several at once, or a Google Authenticator export QR (otpauth-migration://).',
   popupTotpUriRequired: 'Paste an otpauth:// URI first',
   popupTotpAddFailed: 'Failed to parse URI',
   popupTotpAdded: 'Code added',
+  popupTotpAllExist: 'Those codes are already in your vault',
   popupTotpDeleted: 'Code deleted',
   popupDeleteTotpTitle: 'Delete 2FA code?',
   popupDeleteTotpMessage: 'You will no longer be able to generate codes for {issuer}.',
@@ -144,6 +145,7 @@ const en: TranslationMap = {
   navGeneral: 'General',
   navInterception: 'Interception',
   navSync: 'Sync',
+  navData: 'Import & Export',
   navSecurity: 'Security',
   navDeveloper: 'Developer',
 
@@ -232,6 +234,19 @@ const en: TranslationMap = {
   optionsRelayPlaceholder: 'wss://relay.example.com',
   optionsNoDevices: 'No devices.',
   optionsThisDevice: 'This Device',
+  optionsDataTitle: 'Import & Export',
+  optionsDataDesc:
+    'Move passkeys and MFA codes between Fenko Vault and other providers. Everything is read and written on this device.',
+  optionsImportCardTitle: 'Import from a file',
+  optionsImportCardDesc:
+    'Reads Credential Exchange Format (Apple, Google, 1Password, Bitwarden, Dashlane), Bitwarden, Proton Pass and Dashlane JSON, Google Authenticator export payloads, Aegis, 2FAS, andOTP, FreeOTP+, Raivo, Ente Auth, LastPass Authenticator, and the MFA column of the password-manager CSV exports. Shows a preview first and skips anything already in your vault.',
+  optionsOpenImportPage: 'Choose a file',
+  optionsTemplatesTitle: 'Templates',
+  optionsTemplatesDesc:
+    'Coming from an app with no export, or typing seeds in by hand? Fill in a template and import it. Rows starting with # are comments explaining each column.',
+  optionsExportCardTitle: 'Export',
+  optionsExportCardDesc:
+    'Your own backup, or a format another provider can read. These files hold passkey private keys and MFA seeds in plaintext — delete them once the other app has imported them. For a backup you intend to keep, use the password-protected export in the popup.',
   optionsSecurityTitle: 'Security',
   optionsSecurityDesc: 'Encryption and access control settings.',
   optionsMasterPassword: 'Master PIN',
@@ -297,6 +312,8 @@ const en: TranslationMap = {
   optionsNoWebAuthnLogs: 'No WebAuthn events logged yet.',
   optionsImportConfirm: 'This will overwrite ALL existing data. Are you sure?',
   optionsImportSuccess: 'Data imported. Reload the extension to apply changes.',
+  optionsExportPlaintextWarning:
+    'This file holds your passkey private keys and MFA seeds in plaintext. Delete it once the other app has imported it. Continue?',
   optionsInvalidJson: 'Invalid JSON file.',
   optionsClearConfirm: 'Delete all passkeys? This cannot be undone.',
   optionsClearSuccess: 'All passkeys cleared.',
@@ -309,8 +326,9 @@ const en: TranslationMap = {
   timeHoursAgo: '{count}h ago',
   timeDaysAgo: '{count}d ago',
 
-  importHeader: 'Import Passkeys',
-  importHeaderDesc: 'Import passkeys from a backup file',
+  importHeader: 'Import Passkeys & MFA',
+  importHeaderDesc:
+    'Bring passkeys and MFA seeds in from another provider, a backup, or a filled-in template',
   importDropHere: 'Drop your backup file here',
   importOrBrowse: 'or click to browse',
   importChooseFile: 'Choose File',
@@ -341,6 +359,22 @@ const en: TranslationMap = {
   importSuccess: 'Successfully imported {count} passkey{plural}!',
   importFailed: 'Failed to import passkeys: {error}',
   importCloseReturn: 'Close and return to extension',
+
+  importDetectedFormat: 'Detected: {format}',
+  importFoundEntries: 'Ready to import {passkeys} passkey(s) and {totp} MFA entry(ies)',
+  importNothingNew: 'Everything in this file is already in your vault',
+  importSkippedItems: '{count} entry(ies) skipped:',
+  importKindPasskey: 'Passkey',
+  importKindMfa: 'MFA',
+  importSucceeded: 'Imported {passkeys} passkey(s) and {totp} MFA entry(ies)',
+  importSourcesTitle: 'Where can this come from?',
+  importSourcesPasskeys:
+    'Passkeys: Credential Exchange Format (Apple, Google, 1Password, Bitwarden, Dashlane), Bitwarden JSON, Proton Pass JSON, Dashlane JSON, and Fenko backups.',
+  importSourcesMfa:
+    'MFA: Google Authenticator export QR, Aegis, 2FAS, andOTP, FreeOTP+, Raivo, Ente Auth, LastPass Authenticator, plus the TOTP column of Bitwarden, 1Password, Proton Pass, Dashlane, KeePassXC, LastPass and Keeper exports.',
+  importSourcesTemplate: 'Nothing fits? Fill in a template and import that.',
+  importTemplateMfa: 'MFA template (CSV)',
+  importTemplatePasskey: 'Passkey template (CSV)',
 
   syncSetupHeader: 'Sync Setup',
   syncCreateNewChain: 'Create New Sync Chain',

@@ -59,6 +59,7 @@ Intercepts WebAuthn API calls and stores passkeys locally, bypassing the browser
 - **Unified vault** — passkeys and 2FA codes share one searchable list with per-type filters; each entry expands to show its details
 - **Vault lock** — optional 4–12 digit master PIN encrypts the vault at rest and locks the popup; set, change, or remove it any time
 - **Backup & import** — export all passkeys (including private keys) and TOTP entries as a JSON file, import on another device
+- **Move in from anywhere** — import passkeys and MFA seeds from CXF, Bitwarden, Proton Pass, Dashlane, 1Password, KeePassXC, LastPass, Keeper, Google Authenticator, Aegis, 2FAS, andOTP, FreeOTP+, Raivo and Ente Auth; export back out as CXF, `otpauth://` or CSV — Options → Import & Export ([details](docs/porting/README.md))
 - **Cross-device sync** — optional Nostr-based sync chain using a BIP-39 seed phrase; passkeys and 2FA codes sync end-to-end encrypted
 - **Emergency access** — standalone recovery page for vault management without the extension popup
 - **Chrome, Firefox & Android** — one codebase; browser extension plus a native Android passkey provider
@@ -201,6 +202,7 @@ Key features:
 - Configurable interception rules for disabled, all-sites, and allowlist modes
 - Unified, searchable popup with per-type filters and light/dark themes
 - Backup and import workflows for moving passkeys and 2FA codes between environments
+- Import from other providers: Credential Exchange Format, Bitwarden, Proton Pass, Dashlane, 1Password, KeePassXC, LastPass, Keeper, Google Authenticator, Aegis, 2FAS, andOTP, FreeOTP+, Raivo, Ente Auth — or a fillable CSV template
 - Optional cross-device sync using a Nostr-based sync chain
 - Developer tools for console logging, storage inspection, sync protocol logs, and WebAuthn event logs
 
@@ -208,6 +210,7 @@ Important: Fenko Vault is intended as a research and developer tool. Private key
 
 What's new:
 
+- Added import from other password managers and authenticator apps, export in Credential Exchange Format, otpauth:// and CSV, and fillable CSV templates
 - Added a built-in TOTP / 2FA authenticator with live codes, clipboard copy, and otpauth:// / QR-image import
 - Merged passkeys and 2FA codes into one searchable vault with per-type filters and expandable details
 - Added an optional master PIN that encrypts the vault at rest and locks the popup
@@ -276,6 +279,7 @@ src/
 ├── background/         # Service worker / background script
 ├── content/            # Content script + WebAuthn injection
 ├── crypto/             # BIP-39, ECDSA, AES-GCM, secure storage
+├── porting/            # Import/export for other providers' formats (CXF, CSV, vendor JSON)
 ├── sync/               # Nostr-based sync service
 ├── ui/                 # popup, options, import, sync-setup, sync-settings, emergency
 ├── manifest.json       # Chrome MV3
@@ -287,7 +291,7 @@ src/
 ## Security
 
 - Passkeys and TOTP secrets live in `chrome.storage.local`. Setting a master PIN adds an AES-GCM encrypted copy and a lock screen, but a raw copy is kept for display — treat the profile as sensitive regardless
-- Export files contain private keys and TOTP secrets — treat them like passwords
+- Export files contain private keys and TOTP secrets — treat them like passwords. The CXF, otpauth:// and CSV exports are plaintext because the receiving app expects that; delete them once imported. The popup's password-protected backup is the one to keep
 - Sync payloads are end-to-end encrypted; relays never see plaintext (see [How sync works](#how-sync-works))
 - Anyone who obtains your sync seed phrase can join your chain and receive your vault — protect it like the vault itself
 - This is a research/developer tool, not a production credential manager
