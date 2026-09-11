@@ -21,6 +21,10 @@ Extras available in this folder if you want to swap any in:
 - Small promo tile (440×280, JPEG, no alpha): `promo-small.jpg`
 - Marquee promo tile (1400×560, JPEG, no alpha): `promo-marquee.jpg`
 
+The small tile now uses Fenko Vault branding. The new captioned video is
+`../video/fenko-vault-promo.mp4`; upload it to YouTube and paste its link into
+the listing. See [promo assets](promo-assets.md) for capture instructions.
+
 ## Listing text
 
 Summary, detailed description, and the per-locale copy live in
